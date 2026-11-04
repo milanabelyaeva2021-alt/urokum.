@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Історія України · Оригінальні сторінки · Урокум</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:#28243a;background:#f7f5fb}
+*{box-sizing:border-box}body{margin:0}button{font:inherit;border:1px solid #ded5ea;background:#fff;border-radius:12px;padding:10px 13px;cursor:pointer;color:#332b48}
+button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor:default}.primary{background:#6c45ad;border-color:#6c45ad;color:white;font-weight:700}.primary:hover:not(:disabled){background:#59368f}
+.top{background:#2c2440;color:white;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 22px}.top a{color:white;text-decoration:none;font-weight:800}.top button{white-space:nowrap}.shell{display:grid;grid-template-columns:260px minmax(0,1fr) 296px;gap:14px;margin:auto;max-width:1640px;padding:16px}
+.sidebar,.questions,.paperPanel{border:1px solid #e7e0f0;background:white;border-radius:17px}.sidebar{padding:16px;align-self:start;max-height:calc(100vh - 105px);overflow:auto;position:sticky;top:14px}
+.sidebar h2{font-size:19px;margin:7px 0 16px}.chapter{font-size:13px;font-weight:750;color:#624588;padding:12px 5px 6px}.chapter small{display:block;font-weight:400;color:#736d7b;margin-top:3px}.para{width:100%;font-size:13px;text-align:left;display:block;border:0;padding:10px;border-radius:9px;margin:3px 0;line-height:1.35}
+.para.active{background:#eae0fb;color:#4b2a87;font-weight:700}.para small{display:block;color:#756b82;margin-top:3px}.paperPanel{min-width:0;padding:14px;display:flex;flex-direction:column;gap:12px;align-items:center}
+.paperToolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;width:100%}
+.pageLabel{font-size:13px;color:#645a71}.pageLabel strong{display:block;font-size:17px;color:#322c3c}
+#paper{width:100%;display:flex;align-items:flex-start;justify-content:center;background:#ebe7e1;padding:14px;min-height:420px;border-radius:12px;overflow:auto}
+#pageCanvas{display:block;max-width:100%;height:auto;background:white;box-shadow:0 3px 16px #291d342a}
+#paperStatus{padding:45px 20px;color:#625971;text-align:center}
+.controls{display:flex;justify-content:space-between;width:100%;gap:10px}.controls button{flex:1;text-align:center}
+.questions{position:sticky;top:14px;align-self:start;padding:20px;max-height:calc(100vh - 105px);overflow:auto}
+.questions h2{font-size:19px;margin:0 0 10px}.questions p{font-size:14px;line-height:1.5}.muted{color:#756b80}.answer{width:100%;padding:11px;text-align:left;display:block;margin:7px 0;border:1px solid #e1d9eb;line-height:1.4;background:#fff}
+.answer.chosen{background:#e9e1fc;border-color:#6d4cac}.answer.correct{background:#e5f4e8;border-color:#397950}.answer.wrong{background:#faebeb;border-color:#a95c5c}
+.feedback{font-weight:650;line-height:1.5;margin:11px 0;font-size:14px}.status{font-size:13px;line-height:1.6}.source{font-size:12px;color:#7b7183;margin:12px 0}.source a{color:#5a399a}
+#message{margin:14vh auto;max-width:700px;padding:30px;background:white;border-radius:16px;line-height:1.6}
+.full .top,.full .sidebar{display:none}.full .shell{grid-template-columns:minmax(0,1fr) 310px;max-width:1520px;padding:7px}.full .paperPanel{border:0}.full .questions{top:8px}
+#exitFull{display:none}.full #exitFull{display:inline-block}
+@media(max-width:1050px){.shell{grid-template-columns:205px minmax(0,1fr)}.questions{grid-column:2;position:static;max-height:none}.sidebar{grid-row:1/3}}
+@media(max-width:700px){.shell{display:flex;flex-direction:column;padding:8px}.sidebar{position:static;max-height:220px}.questions{position:static;max-height:none}.paperPanel{padding:8px}#paper{padding:5px;min-height:200px}.top{padding:10px}.top span{display:none}.full .shell{display:flex;flex-direction:column}.full .questions{position:static}}
+</style>
+</head>
+<body>
+<header class="top"><a href="/">← Урокум</a><span>Історія України · Гісем і Мартинюк · 11 клас</span><button id="fullscreen">⛶ Повний екран</button></header>
+<div id="message">Відкриваю справжні сторінки підручника…</div>
+<div class="shell" id="app" hidden>
+<aside class="sidebar"><h2>Зміст підручника</h2><div id="toc"></div></aside>
+<main class="paperPanel">
+ <div class="paperToolbar"><div class="pageLabel"><strong id="lessonName"></strong><span id="pageInfo"></span></div><button id="exitFull" onclick="toggleFull(false)">← До змісту</button></div>
+ <div id="paper"><div id="paperStatus">Готую сторінку…</div><canvas id="pageCanvas" hidden aria-label="Оригінальна сторінка підручника"></canvas></div>
+ <div class="controls"><button id="prevPage">← Попередня</button><button id="nextPage" class="primary" disabled>Наступна сторінка →</button></div>
+ <div class="status muted">Сторінки відтворюються в оригінальному оформленні: текст, таблиці, карти й ілюстрації.</div>
+</main>
+<section class="questions" aria-live="polite">
+ <h2>🧠 Перевір себе</h2>
+ <p class="muted" id="questionIntro">Після кожної сторінки буде запитання з прочитаного.</p>
+ <div id="questionArea"></div>
+ <div class="source">Оригінальна книга: <a href="https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf" target="_blank" rel="noopener">ІМЗО</a>.</div>
+</section>
+</div>
+<script type="module">
+import * as pdfjs from "/vendor/pdfjs/pdf.mjs";
+pdfjs.GlobalWorkerOptions.workerSrc="/vendor/pdfjs/pdf.worker.mjs";
+const $=id=>document.getElementById(id);
+const id=new URLSearchParams(location.search).get("id")||"history11-gisem-stand";
+const sourceURL="/api/printed-book/history11-gisem-stand.pdf";
+let book=null,doc=null,lessons=[],selected=null,pageNumber=5,seq=0,answerGiven=false,questionsCache=new Map();
+const starterQuestions={
+ 5:{question:"Який період історії України розглядається в цьому підручнику?",options:["Лише Давня історія","Другий період Новітньої історії","Лише середньовіччя","Україна XVI століття"],correct:1,explanation:"Вступ пояснює, що курс присвячено подіям від 1945 року до початку XXI століття."},
+ 6:{question:"Яка міжнародна організація прийняла УРСР до складу держав-засновниць?",options:["Європейський Союз","НАТО","Організація Об’єднаних Націй","Рада Європи"],correct:2,explanation:"Українська РСР увійшла до складу ООН після Другої світової війни."},
+ 7:{question:"Яка подія стала вирішальною для відновлення незалежності України?",options:["Проголошення незалежності 24 серпня 1991 року","Утворення ООН","Початок десталінізації","Завершення Другої світової війни"],correct:0,explanation:"24 серпня 1991 року Україна проголосила незалежність."}
+};
+function flatten(items){for(const item of items||[]){if(item.type==="paragraph")lessons.push(item);if(item.children)flatten(item.children)}}
+function renderTOC(items){const wrap=$("toc");for(const item of items||[]){
+ if(item.type==="chapter"){const d=document.createElement("div");d.className="chapter";d.textContent=item.title;const small=document.createElement("small");small.textContent="Стор. "+item.startPage+"–"+item.endPage;d.append(small);wrap.append(d)}
+ else if(item.type==="paragraph"){const btn=document.createElement("button");btn.className="para";btn.dataset.id=item.id;btn.textContent=item.title;const small=document.createElement("small");small.textContent="Стор. "+item.startPage+"–"+item.endPage;btn.append(small);btn.addEventListener("click",()=>selectLesson(item));wrap.append(btn)}
+ if(item.children)renderTOC(item.children);
+}}
+function persist(){try{localStorage.setItem("urokum-page:"+id,JSON.stringify({id:selected.id,page:pageNumber}))}catch{}}
+function selectLesson(lesson,requestedPage){selected=lesson;pageNumber=Math.max(lesson.startPage,Math.min(lesson.endPage,requestedPage||lesson.startPage));showPage()}
+function getLessonByPage(n){return lessons.find(x=>n>=x.startPage&&n<=x.endPage)}
+async function showPage(){
+ const token=++seq,lesson=selected;
+ answerGiven=false;
+ $("nextPage").disabled=true;$("pageCanvas").hidden=true;$("paperStatus").hidden=false;$("paperStatus").textContent="Відкриваю сторінку "+pageNumber+"…";
+ $("questionArea").replaceChildren();$("questionIntro").textContent="Прочитай сторінку, потім дай відповідь на запитання.";
+ $("lessonName").textContent=lesson.title;$("pageInfo").textContent="Стор. "+pageNumber+" · параграф: "+lesson.startPage+"–"+lesson.endPage;
+ for(const b of document.querySelectorAll(".para"))b.classList.toggle("active",b.dataset.id===lesson.id);
+ $("prevPage").disabled=pageNumber===lesson.startPage&&lessons.indexOf(lesson)===0;
+ $("nextPage").textContent=pageNumber===lesson.endPage?"Наступний параграф →":"Наступна сторінка →";
+ persist();
+ try{
+  const page=await doc.getPage(pageNumber);if(token!==seq)return;
+  const viewport=page.getViewport({scale:1});
+  const available=Math.min(880,Math.max(300,$("paper").clientWidth-30));
+  const displayScale=available/viewport.width;
+  const pixelRatio=Math.min(2,window.devicePixelRatio||1);
+  const renderViewport=page.getViewport({scale:displayScale*pixelRatio});
+  const canvas=$("pageCanvas"),ctx=canvas.getContext("2d",{alpha:false});
+  canvas.width=Math.ceil(renderViewport.width);canvas.height=Math.ceil(renderViewport.height);
+  canvas.style.width=Math.round(viewport.width*displayScale)+"px";
+  canvas.style.height=Math.round(viewport.height*displayScale)+"px";
+  await page.render({canvasContext:ctx,viewport:renderViewport}).promise;
+  if(token!==seq)return;
+  $("paperStatus").hidden=true;canvas.hidden=false;
+  const textInfo=await page.getTextContent();
+  if(token!==seq)return;
+  const pageText=textInfo.items.filter(x=>typeof x.str==="string").map(x=>x.str).join(" ").slice(0,12000);
+  await makeQuestion(token,pageText);
+ }catch(e){if(token!==seq)return; $("paperStatus").textContent="Не вдалося відкрити сторінку. Джерело може бути тимчасово недоступним.";fallbackQuestion(token,"Не вдалося сформувати запитання.");console.error(e)}
+}
+function makeChoices(token,quiz,label){
+ if(token!==seq)return;
+ const area=$("questionArea");area.replaceChildren();
+ const pre=document.createElement("p");pre.className="muted status";pre.textContent=label;area.append(pre);
+ const title=document.createElement("h3");title.textContent=quiz.question;area.append(title);
+ const answers=[], feedback=document.createElement("div");feedback.className="feedback";
+ let chosen=-1,done=false;
+ quiz.options.forEach((option,i)=>{
+  const b=document.createElement("button");b.className="answer";b.textContent=String.fromCharCode(1040+i)+". "+option;
+  b.onclick=()=>{if(done)return;chosen=i;answers.forEach(z=>z.classList.remove("chosen"));b.classList.add("chosen")};
+  answers.push(b);area.append(b);
+ });
+ const check=document.createElement("button");check.className="primary";check.textContent="Перевірити";
+ check.onclick=()=>{if(done)return;if(chosen<0){feedback.textContent="Обери один варіант.";return;}
+  done=true;answers[quiz.correct].classList.add("correct");answers[chosen].classList.add(chosen===quiz.correct?"correct":"wrong");
+  feedback.textContent=(chosen===quiz.correct?"Правильно! ":"Не зовсім. ")+(quiz.explanation||"Спробуй перечитати сторінку.");
+  check.disabled=true;answerGiven=true;$("nextPage").disabled=false;
+ };
+ area.append(check,feedback);
+}
+function fallbackQuestion(token,reason){
+ if(token!==seq)return;
+ const area=$("questionArea");area.replaceChildren();
+ const p=document.createElement("p");p.textContent="Яка головна думка цієї сторінки? Спробуй переказати її своїми словами.";area.append(p);
+ const note=document.createElement("p");note.className="muted status";note.textContent=reason+" Це завдання для самоперевірки, а не запитання ШІ.";area.append(note);
+ const b=document.createElement("button");b.className="primary";b.textContent="Я переказав(ла) — далі";
+ b.onclick=()=>{b.disabled=true;answerGiven=true;$("nextPage").disabled=false};area.append(b);
+}
+async function makeQuestion(token,pageText){
+ if(token!==seq)return;
+ const key=pageNumber;if(questionsCache.has(key)){makeChoices(token,questionsCache.get(key),"Запитання за прочитаною сторінкою");return}
+ $("questionArea").textContent="ШІ готує запитання до сторінки "+pageNumber+"…";
+ try{
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),18000);
+  let resp;try{resp=await fetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:pageText,task:"checkpoint"}),signal:controller.signal})}finally{clearTimeout(timer)}
+  const data=await resp.json();if(!resp.ok)throw Error(data.error||"AI unavailable");
+  const q=data.quiz;
+  if(!q||typeof q.question!=="string"||!Array.isArray(q.options)||q.options.length!==4||!Number.isInteger(q.correct)||q.correct<0||q.correct>3)throw Error("Invalid AI question");
+  questionsCache.set(key,q);makeChoices(token,q,"Запитання згенеровано ШІ");
+ }catch(err){
+  if(token!==seq)return;
+  if(starterQuestions[key])makeChoices(token,starterQuestions[key],"Підготовлене запитання за матеріалом сторінки (ШІ недоступний)");
+  else fallbackQuestion(token,"ШІ тимчасово недоступний або ще не налаштований.");
+ }
+}
+function navigate(direction){
+ if(direction>0&&!answerGiven)return;
+ const i=lessons.indexOf(selected);
+ if(direction>0){if(pageNumber<selected.endPage)pageNumber++;else if(i<lessons.length-1){selected=lessons[i+1];pageNumber=selected.startPage}else return}
+ else {if(pageNumber>selected.startPage)pageNumber--;else if(i>0){selected=lessons[i-1];pageNumber=selected.endPage}else return}
+ showPage();window.scrollTo({top:0,behavior:"instant"});
+}
+$("prevPage").onclick=()=>navigate(-1);$("nextPage").onclick=()=>navigate(1);
+function toggleFull(on){document.body.classList.toggle("full",on);$("fullscreen").textContent=on?"Вийти з повного екрана":"⛶ Повний екран";if(on&&document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});else if(!on&&document.fullscreenElement)document.exitFullscreen().catch(()=>{});}
+window.toggleFull=toggleFull;$("fullscreen").onclick=()=>toggleFull(!document.body.classList.contains("full"));
+document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&document.body.classList.contains("full")){document.body.classList.remove("full");$("fullscreen").textContent="⛶ Повний екран"}});
+async function start(){
+ try{
+  if(id!=="history11-gisem-stand")throw Error("Невідоме видання");
+  const resp=await fetch("/books/h11/outline.json",{cache:"no-store"});if(!resp.ok)throw Error("Не знайдено зміст.");
+  book=await resp.json();flatten(book.contents);renderTOC(book.contents);if(lessons.length!==29)throw Error("Невірна структура книги.");
+  const task=pdfjs.getDocument({url:sourceURL,rangeChunkSize:131072});
+  doc=await task.promise;
+  if(doc.numPages<270)throw Error("Оригінал книги містить недостатньо сторінок.");
+  let restored=null;try{restored=JSON.parse(localStorage.getItem("urokum-page:"+id)||"null")}catch{}
+  selected=lessons.find(x=>x.id===restored?.id)||lessons[0];
+  pageNumber=restored?.page>=selected.startPage&&restored?.page<=selected.endPage?restored.page:selected.startPage;
+  $("message").hidden=true;$("app").hidden=false;showPage();
+ }catch(err){console.error(err);$("message").replaceChildren();
+  const h=document.createElement("h2");h.textContent="Не вдалося завантажити оригінальні сторінки.";const p=document.createElement("p");p.textContent="Спробуй оновити сторінку або відкрий офіційний примірник ІМЗО.";const a=document.createElement("a");a.href="https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf";a.textContent="Оригінальний підручник";a.target="_blank";a.rel="noopener";$("message").append(h,p,a)}
+}
+start();
+</script>
+</body>
+</html>
