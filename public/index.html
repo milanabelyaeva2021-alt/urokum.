@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урокум — інтерактивні підручники</title>
+<style>
+:root{font-family:Inter,Arial,sans-serif;color:#252338;background:#f5f3fa}*{box-sizing:border-box}
+body{margin:0}.top{background:#29243d;color:white;padding:22px max(22px,calc((100% - 1050px)/2));display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:26px;font-weight:800;letter-spacing:-1px}.logo span{color:#c5a9ff}
+main{max-width:1050px;margin:36px auto;padding:0 20px}.panel{background:white;border:1px solid #e8e3f0;border-radius:20px;padding:26px;box-shadow:0 8px 28px #30234b0c}
+h1{font-size:clamp(26px,4vw,38px);margin:0 0 10px}h2{margin-top:0}.muted{color:#77748a;line-height:1.55}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px;margin-top:24px}
+button,.tile{border:1px solid #ded7eb;background:#fff;border-radius:13px;padding:15px;cursor:pointer;color:#302a45;font-size:15px;text-align:left}
+button:hover,.tile:hover{border-color:#8a69c5;background:#faf8ff}.primary{background:#6544a3;color:white;border:0;text-align:center}.primary:hover{background:#513487;color:white}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.hidden{display:none!important}
+input[type=file]{display:block;margin:16px 0}.book{padding:16px;border:1px solid #e5dfef;border-radius:14px;margin:10px 0}
+.page{padding:12px;border-bottom:1px solid #eee;cursor:pointer}.page:hover{background:#faf8ff}
+#pageText{white-space:pre-wrap;line-height:1.7;background:#faf9fc;padding:18px;border-radius:12px;min-height:90px}
+#answer{white-space:pre-wrap;line-height:1.6;margin-top:16px;padding:18px;background:#f3effb;border-radius:12px}
+.back{border:0;background:transparent;color:#6544a3;padding:8px 0}.status{margin-top:10px;color:#a04444}
+@media(max-width:600px){main{margin:20px auto}.panel{padding:18px}.top{padding:18px 20px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="logo">Уро<span>кум</span></div><div>Навчайся у своєму темпі</div></header>
+<main>
+<section id="home" class="panel">
+<h1>Що будемо вивчати?</h1><p class="muted">Обери клас, предмет і підручник або завантаж PDF, з яким хочеш працювати.</p>
+<h2>Клас</h2><div class="grid" id="grades"></div>
+</section>
+<section id="subjects" class="panel hidden"><button class="back" onclick="show('home')">← Назад</button><h1 id="subjectTitle">Предмети</h1><p class="muted">Обери предмет.</p><div class="grid" id="subjectGrid"></div></section>
+<section id="books" class="panel hidden"><button class="back" onclick="show('subjects')">← Назад</button><h1 id="bookTitle">Підручники</h1><p class="muted">Приклади видань. Точний текст з'явиться після завантаження PDF.</p><div id="bookList"></div></section>
+<section id="reader" class="panel hidden"><button class="back" onclick="show('books')">← Назад</button><h1>Мій підручник</h1><p class="muted">Завантаж PDF-файл підручника. Підтримуються PDF із текстовим шаром; скановані сторінки потребують OCR.</p>
+<input id="pdf" type="file" accept="application/pdf"><button class="primary" onclick="uploadPdf()">Завантажити підручник</button><div id="uploadStatus" class="status"></div>
+<div id="readerArea" class="hidden"><h2 id="pdfName"></h2><div class="grid" id="pages"></div><h2>Текст сторінки</h2><div id="pageText">Обери сторінку.</div><div class="actions"><button class="primary" onclick="askAI('explain')">Пояснити сторінку</button><button onclick="askAI('test')">Створити тест</button></div><div id="answer" class="hidden"></div></div>
+</section>
+</main>
+<script>
+const sections=["home","subjects","books","reader"];let grade=0,subject="",book="",bookId="",currentText="";
+function show(id){sections.forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id))}
+const grades=document.getElementById("grades");for(let i=1;i<=11;i++){let b=document.createElement("button");b.textContent=i+" клас";b.onclick=()=>chooseGrade(i);grades.append(b)}
+function chooseGrade(n){grade=n;document.getElementById("subjectTitle").textContent=grade+" клас — предмети";let names=["Українська мова","Українська література","Історія України","Всесвітня історія","Математика","Англійська мова","Біологія","Географія","Фізика","Хімія"];let g=document.getElementById("subjectGrid");g.innerHTML="";names.forEach(s=>{let b=document.createElement("button");b.textContent=s;b.onclick=()=>chooseSubject(s);g.append(b)});show("subjects")}
+function chooseSubject(s){subject=s;document.getElementById("bookTitle").textContent=grade+" клас — "+s;let list=document.getElementById("bookList");list.innerHTML="";let examples=(grade===11&&s==="Історія України")?["Гісем — стандартний рівень","Гісем — профільний рівень","Сорочинська","Власов — профільний рівень","Даниленко","Струкевич","Хлібовська","Мудрий — Історія: Україна і світ","Власов — стандартний рівень"]:["Завантажити власний PDF підручника"];examples.forEach(name=>{let d=document.createElement("div");d.className="book";d.innerHTML="<b></b><p class='muted'>Щоб читати справжній текст саме цього видання, додай його PDF.</p><button class='primary'>Відкрити</button>";d.querySelector("b").textContent=name;d.querySelector("button").onclick=()=>{book=name;show("reader")};list.append(d)});show("books")}
+async function uploadPdf(){let f=document.getElementById("pdf").files[0],s=document.getElementById("uploadStatus");if(!f){s.textContent="Спочатку вибери PDF-файл.";return}let data=new FormData();data.append("pdf",f);s.textContent="Завантажую та читаю PDF…";try{let r=await fetch("/api/upload",{method:"POST",body:data}),j=await r.json();if(!r.ok)throw Error(j.error);bookId=j.id;document.getElementById("pdfName").textContent=j.name;let p=document.getElementById("pages");p.innerHTML="";j.pages.forEach(x=>{let b=document.createElement("button");b.textContent="Сторінка "+x.number;b.onclick=()=>loadPage(x.number);p.append(b)});document.getElementById("readerArea").classList.remove("hidden");s.textContent=`Готово. Сторінок: ${j.pageCount}.`;if(j.pages.length)loadPage(1)}catch(e){s.textContent=e.message}}
+async function loadPage(n){let r=await fetch(`/api/book/${bookId}/page/${n}`),j=await r.json();currentText=j.text||"";document.getElementById("pageText").textContent=currentText||"На цій сторінці не знайдено тексту. Можливо, це скан.";document.getElementById("answer").classList.add("hidden")}
+async function askAI(task){let a=document.getElementById("answer");if(!currentText){a.textContent="На сторінці немає розпізнаного тексту.";a.classList.remove("hidden");return}a.textContent="Готую відповідь…";a.classList.remove("hidden");try{let r=await fetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:currentText,task})}),j=await r.json();a.textContent=r.ok?j.answer:(j.error||"Сталася помилка")}catch{a.textContent="Не вдалося зв'язатися із сервером."}}
+</script>
+</body></html>
