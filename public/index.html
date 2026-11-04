@@ -49,7 +49,7 @@ async function chooseSubject(s){
    const button=document.createElement('button');button.className='primary';
    button.textContent=x.available?'Читати електронний підручник':'Електронна версія готується';
    button.disabled=!x.available;
-   if(x.available)button.onclick=()=>{location.href='/e-reader.html?id='+encodeURIComponent(x.id)};
+   if(x.available)button.onclick=()=>{location.href=(x.mode==='printed'?'/page-reader.html?id=':'/e-reader.html?id=')+encodeURIComponent(x.id)};
    wrapper.append(info,button);list.append(wrapper);
   }
  }catch(error){list.replaceChildren();const msg=document.createElement('div');msg.className='empty';msg.textContent='Не вдалося завантажити електронний каталог: '+error.message;list.append(msg)}
