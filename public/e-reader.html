@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Читання — Урокум</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#292338;background:#f7f5fb}
+*{box-sizing:border-box}body{margin:0}button{cursor:pointer;font:inherit;border:1px solid #dfd7ec;border-radius:12px;background:white;color:#332c45;padding:10px 15px}button:hover:not(:disabled){background:#eee7fa}button:disabled{opacity:.5;cursor:not-allowed}
+header{display:flex;align-items:center;gap:15px;padding:13px max(20px,calc((100% - 1200px)/2));background:#2b2440;color:white;position:sticky;top:0;z-index:5}
+header a{color:white;text-decoration:none;font-weight:800}header small{opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header button{margin-left:auto;white-space:nowrap}
+.shell{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1250px;margin:auto;gap:26px;padding:28px 20px}
+aside{background:#fff;border:1px solid #ebe5f2;border-radius:18px;padding:19px;align-self:start;position:sticky;top:88px;max-height:calc(100vh - 110px);overflow:auto}
+aside h2{font-size:18px;margin:4px 0 18px}
+.toc-entry{display:block;width:100%;border:0;border-radius:10px;text-align:left;margin:5px 0;padding:12px 11px;line-height:1.4}
+.toc-entry.active{background:#e8defa;color:#513094;font-weight:750}
+.toc-entry.chapter{font-weight:750;background:#f5f2fa;margin-top:16px}
+.toc-entry.child{padding-left:24px}
+.toc-entry small{display:block;font-weight:400;margin-top:4px;color:#777083}
+.reading{background:#fff;min-width:0;border:1px solid #ebe5f2;border-radius:20px;padding:clamp(18px,4vw,49px);box-shadow:0 12px 35px #3e2d590b}
+.eyebrow{color:#7152a4;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+h1{font-size:clamp(28px,4vw,41px);line-height:1.2;margin:15px 0 12px}h2{font-size:23px;line-height:1.3;margin:12px 0 23px}.meta{color:#797187}
+.progress{height:7px;background:#ece7f4;border-radius:20px;overflow:hidden;margin:20px 0 30px}.progress>div{height:100%;background:#7957bd;width:0;transition:width .3s}
+.paragraph{font-family:Georgia,"Times New Roman",serif;font-size:clamp(19px,2.1vw,22px);line-height:1.85;margin:0 0 22px;letter-spacing:.002em}
+.quiz{border:1px solid #d9c9f2;background:#f6f1fd;border-radius:18px;padding:23px;margin:30px 0}
+.quiz h3{font-size:20px;margin:4px 0 12px}.quiz .hint{color:#6b548a;font-size:14px}
+.choice{display:block;width:100%;margin:9px 0;padding:14px;border:1px solid #ded6e9;background:#fff;text-align:left;border-radius:11px;line-height:1.4}
+.choice.selected{border-color:#7654b2;background:#eae0fa}.choice.correct{border-color:#397753;background:#e4f5eb}
+.choice.wrong{border-color:#a95a5a;background:#fbe9e9}.feedback{margin:15px 0;font-weight:650;line-height:1.6}
+.primary{background:#7251b2;color:white;border-color:#7251b2;font-weight:700}.primary:hover:not(:disabled){background:#58358e}
+.controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:28px}.controls button{min-width:140px}
+.notice{padding:16px;background:#faf6eb;border-radius:12px;line-height:1.6}.error{color:#a43b3b}
+.side-label{font-size:12px;color:#857a96;text-transform:uppercase;letter-spacing:.08em;margin-top:12px}
+#loading{max-width:700px;margin:8vh auto;padding:25px;font-size:18px}
+body.fullread{background:white}body.fullread header{display:none}body.fullread .shell{display:block;max-width:1050px;padding:0}body.fullread aside{display:none}body.fullread .reading{border:0;border-radius:0;box-shadow:none;min-height:100vh;padding:38px clamp(20px,7vw,110px)}
+body.fullread .paragraph{font-size:clamp(21px,2.4vw,26px)}body.fullread #exitFull{display:inline-block}
+#exitFull{display:none}
+@media(max-width:800px){.shell{display:block;padding:10px}aside{position:static;max-height:240px;margin-bottom:12px}.reading{padding:23px}header{padding:12px}.controls button{min-width:0}header small{display:none}}
+</style>
+</head>
+<body>
+<header><a href="/">← Урокум</a><small id="bookLabel">Електронний підручник</small><button id="fullscreen">⛶ На весь екран</button></header>
+<div id="loading">Завантажую електронний підручник…</div>
+<div class="shell" id="app" hidden>
+<aside><h2>Зміст підручника</h2><div id="toc"></div><div class="side-label">Прогрес зберігається у браузері</div></aside>
+<main class="reading">
+<button id="exitFull" onclick="toggleFull(false)">← До змісту</button>
+<div class="eyebrow" id="kicker">Читання</div>
+<h1 id="lessonTitle"></h1><div class="meta" id="metadata"></div>
+<div class="progress" aria-label="Прогрес читання"><div id="progressBar"></div></div>
+<div id="section"></div><div id="quizArea"></div>
+<div class="controls"><button id="previous">← Назад</button><span class="meta" id="counter"></span><button id="next" class="primary" disabled>Далі →</button></div>
+<p class="meta" id="saveMessage" aria-live="polite"></p>
+</main>
+</div>
+<script>
+const el=id=>document.getElementById(id);
+let book,lessons=[],lessonIndex=0,sectionIndex=0,unlocked=false,activeQuiz=null,answered=false;
+const requested=new URLSearchParams(location.search).get("id")||"history11-demo";
+const safeId=/^[a-z0-9-]+$/i.test(requested)?requested:null;
+const storageKey=()=> "urokum:read:"+book.id;
+const cleanText=text=>String(text||"").trim();
+function allLessons(items){let result=[];for(const x of items||[]){if(x.type==="paragraph")result.push(x);if(x.children?.length)result.push(...allLessons(x.children))}return result}
+function toggleFull(on){document.body.classList.toggle("fullread",on);el("fullscreen").textContent=on?"Вийти з режиму читання":"⛶ На весь екран";if(on)window.scrollTo(0,0)}
+window.toggleFull=toggleFull;
+el("fullscreen").onclick=()=>toggleFull(!document.body.classList.contains("fullread"));
+function tocEntries(items,depth=0){for(const item of items){const b=document.createElement("button");b.className="toc-entry "+(item.type==="chapter"?"chapter":depth?"child":"");
+b.textContent=item.title;const meta=document.createElement("small");meta.textContent="Стор. "+item.startPage+"–"+item.endPage;b.append(meta);
+const idx=lessons.findIndex(l=>l.id===item.id);if(idx>=0){b.dataset.lesson=idx;b.onclick=()=>{lessonIndex=idx;sectionIndex=0;render();window.scrollTo(0,0)}}else{b.disabled=true;b.title="Вибери параграф у цьому розділі"}el("toc").append(b);if(item.children)tocEntries(item.children,depth+1)}}
+function store(){try{localStorage.setItem(storageKey(),JSON.stringify({lessonIndex,sectionIndex}))}catch{}}
+function render(){if(!lessons.length)return;
+const lesson=lessons[lessonIndex];if(!lesson.sections?.length){el("section").textContent="Для цього параграфа ще немає електронного тексту.";return}
+sectionIndex=Math.max(0,Math.min(sectionIndex,lesson.sections.length-1));const sec=lesson.sections[sectionIndex];
+unlocked=false;answered=false;activeQuiz=null;el("quizArea").replaceChildren();
+el("lessonTitle").textContent=lesson.title;el("metadata").textContent="Стор. "+lesson.startPage+"–"+lesson.endPage+" · "+book.author;
+el("kicker").textContent="Сторінка "+sec.page+" · "+(sec.title||"Читання");el("counter").textContent=(sectionIndex+1)+" / "+lesson.sections.length;
+el("progressBar").style.width=(100*(sectionIndex+1)/lesson.sections.length)+"%";
+for(const btn of document.querySelectorAll(".toc-entry[data.lesson]"))btn.classList.toggle("active",Number(btn.dataset.lesson)===lessonIndex);
+el("section").replaceChildren();if(sec.title){const h=document.createElement("h2");h.textContent=sec.title;el("section").append(h)}
+for(const paragraph of sec.paragraphs||[]){const p=document.createElement("p");p.className="paragraph";p.textContent=paragraph;el("section").append(p)}
+el("previous").disabled=lessonIndex===0&&sectionIndex===0;
+el("next").disabled=true;el("next").textContent=sectionIndex<lesson.sections.length-1?"Наступна сторінка →":lessonIndex<lessons.length-1?"Наступний параграф →":"Завершити ✓";
+el("saveMessage").textContent="Після читання дай відповідь на запитання, щоб продовжити.";
+store();startCheckpoint(sec);window.scrollTo({top:0,behavior:"instant"})}
+function unlock(){unlocked=true;el("next").disabled=false;el("saveMessage").textContent="Чудово! Можна продовжувати читання."}
+function quizView(quiz,source){const area=el("quizArea");area.replaceChildren();activeQuiz=quiz;
+const panel=document.createElement("div");panel.className="quiz";const hint=document.createElement("div");hint.className="hint";hint.textContent=source==="ai"?"Запитання створено ШІ за прочитаним уривком":"Контрольна пауза · запитання підготовлене заздалегідь";panel.append(hint);
+const heading=document.createElement("h3");heading.textContent=quiz.question;panel.append(heading);
+const options=Array.isArray(quiz.options)?quiz.options:[];if(options.length!==4||!Number.isInteger(quiz.correct)||quiz.correct<0||quiz.correct>3){reflectionView();return}
+let selected=-1;
+options.forEach((label,i)=>{const b=document.createElement("button");b.className="choice";b.textContent=String.fromCharCode(1040+i)+". "+label;b.onclick=()=>{if(answered)return;selected=i;for(const x of panel.querySelectorAll(".choice"))x.classList.remove("selected");b.classList.add("selected")};panel.append(b)});
+const feedback=document.createElement("div");feedback.className="feedback";feedback.setAttribute("aria-live","polite");
+const verify=document.createElement("button");verify.className="primary";verify.textContent="Перевірити відповідь";verify.onclick=()=>{if(selected<0){feedback.textContent="Спочатку обери варіант відповіді.";return}answered=true;
+const isCorrect=selected===quiz.correct;const buttons=[...panel.querySelectorAll(".choice")];buttons[selected].classList.add(isCorrect?"correct":"wrong");buttons[quiz.correct].classList.add("correct");
+feedback.textContent=(isCorrect?"Правильно! ":"Поки не зовсім. ")+(quiz.explanation||"Перечитай цей фрагмент і звір відповідь.");
+verify.disabled=true;unlock();};panel.append(verify,feedback);area.append(panel)}
+function reflectionView(message=""){const area=el("quizArea");area.replaceChildren();const panel=document.createElement("div");panel.className="quiz";
+const h=document.createElement("h3");h.textContent="Зупинка для роздумів";const p=document.createElement("p");p.textContent="Спробуй своїми словами переказати головну думку прочитаного фрагмента.";panel.append(h,p);
+if(message){const n=document.createElement("p");n.className="hint";n.textContent=message;panel.append(n)}
+const b=document.createElement("button");b.className="primary";b.textContent="Я переказав(ла) — продовжити";b.onclick=()=>{b.disabled=true;unlock()};panel.append(b);area.append(panel)}
+async function startCheckpoint(section){if(section.checkpoint){quizView(section.checkpoint,"prepared");return}
+const text=(section.paragraphs||[]).join("\n\n").trim();if(!text){unlock();return}
+el("quizArea").textContent="Готую запитання до прочитаного…";
+try{const response=await fetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:"checkpoint",text})});
+const data=await response.json();if(!response.ok)throw Error(data.error||"ШІ тимчасово недоступний");
+if(data.quiz?.question)quizView(data.quiz,"ai");else reflectionView("ШІ не сформував запитання, тому пропонуємо переказ.");}
+catch(e){reflectionView("ШІ-запитання поки недоступні. Для їх роботи власнику сайту потрібно налаштувати OPENAI_API_KEY на сервері.");}}
+function move(step){if(!unlocked&&step>0)return;const current=lessons[lessonIndex];if(step>0){if(sectionIndex<current.sections.length-1)sectionIndex++;else if(lessonIndex<lessons.length-1){lessonIndex++;sectionIndex=0}else{el("saveMessage").textContent="Ти завершив(ла) всі доступні параграфи!";return}}
+else if(sectionIndex>0)sectionIndex--;else if(lessonIndex>0){lessonIndex--;sectionIndex=lessons[lessonIndex].sections.length-1}
+render()}
+el("next").onclick=()=>move(1);el("previous").onclick=()=>move(-1);
+async function start(){try{
+if(!safeId)throw Error("Неправильний ідентифікатор книги.");
+const list=await (await fetch("/books/catalog.json",{cache:"no-store"})).json();
+const entry=list.find(item=>item.id===safeId);
+if(!entry?.available||!entry.file)throw Error("Електронний текст цього підручника ще не доданий. Учням не потрібно завантажувати PDF: власник сайту має один раз підготувати книгу.");
+const response=await fetch("/"+entry.file,{cache:"no-store"});if(!response.ok)throw Error("Файл електронної книги не знайдено.");
+book=await response.json();lessons=allLessons(book.contents);if(!lessons.length)throw Error("У книзі немає параграфів для читання.");
+el("bookLabel").textContent=book.title;document.title=book.title+" — Урокум";tocEntries(book.contents);
+try{const last=JSON.parse(localStorage.getItem(storageKey())||"null");if(last&&Number.isInteger(last.lessonIndex)&&last.lessonIndex>=0&&last.lessonIndex<lessons.length){lessonIndex=last.lessonIndex;sectionIndex=last.sectionIndex||0}}catch{}
+el("loading").hidden=true;el("app").hidden=false;render();
+}catch(e){el("loading").textContent="Не вдалося відкрити електронну книгу: "+e.message}}
+start();
+</script>
+</body>
+</html>
