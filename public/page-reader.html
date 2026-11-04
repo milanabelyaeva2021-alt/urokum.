@@ -16,7 +16,7 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 #paper{width:100%;display:flex;align-items:flex-start;justify-content:center;background:#ebe7e1;padding:14px;min-height:420px;border-radius:12px;overflow:auto}
 #pageCanvas{display:block;max-width:100%;height:auto;background:white;box-shadow:0 3px 16px #291d342a}
 #paperStatus{padding:45px 20px;color:#625971;text-align:center}
-.controls{display:flex;justify-content:space-between;width:100%;gap:10px}.controls button{flex:1;text-align:center}
+.controls{display:flex;justify-content:space-between;width:100%;gap:10px}.controls button{flex:1;text-align:center;min-width:120px}.controls #askQuestion{flex:1.5}
 .questions{position:sticky;top:14px;align-self:start;padding:20px;max-height:calc(100vh - 105px);overflow:auto}
 .questions h2{font-size:19px;margin:0 0 10px}.questions p{font-size:14px;line-height:1.5}.muted{color:#756b80}.answer{width:100%;padding:11px;text-align:left;display:block;margin:7px 0;border:1px solid #e1d9eb;line-height:1.4;background:#fff}
 .answer.chosen{background:#e9e1fc;border-color:#6d4cac}.answer.correct{background:#e5f4e8;border-color:#397950}.answer.wrong{background:#faebeb;border-color:#a95c5c}
@@ -36,12 +36,12 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 <main class="paperPanel">
  <div class="paperToolbar"><div class="pageLabel"><strong id="lessonName"></strong><span id="pageInfo"></span></div><button id="exitFull" onclick="toggleFull(false)">← До змісту</button></div>
  <div id="paper"><div id="paperStatus">Готую сторінку…</div><canvas id="pageCanvas" hidden aria-label="Оригінальна сторінка підручника"></canvas></div>
- <div class="controls"><button id="prevPage">← Попередня</button><button id="nextPage" class="primary" disabled>Наступна сторінка →</button></div>
+ <div class="controls"><button id="prevPage">← Попередня</button><button id="askQuestion" class="primary" disabled>🧠 Запитання після читання</button><button id="nextPage" disabled>Наступна сторінка →</button></div>
  <div class="status muted">Сторінки відтворюються в оригінальному оформленні: текст, таблиці, карти й ілюстрації.</div>
 </main>
 <section class="questions" aria-live="polite">
- <h2>🧠 Перевір себе</h2>
- <p class="muted" id="questionIntro">Після кожної сторінки буде запитання з прочитаного.</p>
+ <h2>🧠 Учитель-ШІ</h2>
+ <p class="muted" id="questionIntro">Прочитай сторінку, потім натисни «Запитання після читання».</p>
  <div id="questionArea"></div>
  <div class="source">Оригінальна книга: <a href="https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf" target="_blank" rel="noopener">ІМЗО</a>.</div>
 </section>
@@ -69,9 +69,9 @@ function selectLesson(lesson,requestedPage){selected=lesson;pageNumber=Math.max(
 function getLessonByPage(n){return lessons.find(x=>n>=x.startPage&&n<=x.endPage)}
 async function showPage(){
  const token=++seq,lesson=selected;
- answerGiven=false;
+ answerGiven=false;$("askQuestion").disabled=true;$("askQuestion").textContent="🧠 Запитання після читання";
  $("nextPage").disabled=true;$("pageCanvas").hidden=true;$("paperStatus").hidden=false;$("paperStatus").textContent="Відкриваю сторінку "+pageNumber+"…";
- $("questionArea").replaceChildren();$("questionIntro").textContent="Прочитай сторінку, потім дай відповідь на запитання.";
+ $("questionArea").replaceChildren();$("questionIntro").textContent="Спочатку прочитай цю сторінку. Потім натисни кнопку під нею — ШІ запитає тебе про прочитане.";
  $("lessonName").textContent=lesson.title;$("pageInfo").textContent="Стор. "+pageNumber+" · параграф: "+lesson.startPage+"–"+lesson.endPage;
  for(const b of document.querySelectorAll(".para"))b.classList.toggle("active",b.dataset.id===lesson.id);
  $("prevPage").disabled=pageNumber===lesson.startPage&&lessons.indexOf(lesson)===0;
@@ -94,7 +94,24 @@ async function showPage(){
   const textInfo=await page.getTextContent();
   if(token!==seq)return;
   const pageText=textInfo.items.filter(x=>typeof x.str==="string").map(x=>x.str).join(" ").slice(0,12000);
-  await makeQuestion(token,pageText);
+  $("askQuestion").disabled=false;
+  $("askQuestion").onclick=()=>{
+    if(token!==seq||answerGiven)return;
+    $("askQuestion").disabled=true;
+    $("askQuestion").textContent="ШІ готує запитання…";
+    makeQuestion(token,pageText);
+  };
+  // The checkpoint appears after reading, never over the printed text.
+  // Scrolling to the end of the page can trigger it automatically.
+  const checkReadPosition=()=>{
+    if(token!==seq||$("askQuestion").disabled||answerGiven)return;
+    const rect=$("pageCanvas").getBoundingClientRect();
+    if(rect.height>500&&rect.bottom<=window.innerHeight+90){
+      $("askQuestion").click();
+      window.removeEventListener("scroll",checkReadPosition);
+    }
+  };
+  window.addEventListener("scroll",checkReadPosition,{passive:true,once:false});
  }catch(e){if(token!==seq)return; $("paperStatus").textContent="Не вдалося відкрити сторінку. Джерело може бути тимчасово недоступним.";fallbackQuestion(token,"Не вдалося сформувати запитання.");console.error(e)}
 }
 function makeChoices(token,quiz,label){
@@ -113,7 +130,7 @@ function makeChoices(token,quiz,label){
  check.onclick=()=>{if(done)return;if(chosen<0){feedback.textContent="Обери один варіант.";return;}
   done=true;answers[quiz.correct].classList.add("correct");answers[chosen].classList.add(chosen===quiz.correct?"correct":"wrong");
   feedback.textContent=(chosen===quiz.correct?"Правильно! ":"Не зовсім. ")+(quiz.explanation||"Спробуй перечитати сторінку.");
-  check.disabled=true;answerGiven=true;$("nextPage").disabled=false;
+  check.disabled=true;answerGiven=true;$("nextPage").disabled=false;$("askQuestion").textContent="✓ Перевірено";
  };
  area.append(check,feedback);
 }
@@ -123,7 +140,7 @@ function fallbackQuestion(token,reason){
  const p=document.createElement("p");p.textContent="Яка головна думка цієї сторінки? Спробуй переказати її своїми словами.";area.append(p);
  const note=document.createElement("p");note.className="muted status";note.textContent=reason+" Це завдання для самоперевірки, а не запитання ШІ.";area.append(note);
  const b=document.createElement("button");b.className="primary";b.textContent="Я переказав(ла) — далі";
- b.onclick=()=>{b.disabled=true;answerGiven=true;$("nextPage").disabled=false};area.append(b);
+ b.onclick=()=>{b.disabled=true;answerGiven=true;$("nextPage").disabled=false;$("askQuestion").textContent="✓ Перевірено";};area.append(b);
 }
 async function makeQuestion(token,pageText){
  if(token!==seq)return;
