@@ -19,7 +19,10 @@
     "title": "Історія України. 11 клас",
     "level": "Рівень стандарту",
     "year": "2019",
-    "available": false
+    "available": true,
+    "mode": "printed",
+    "file": "books/h11/outline.json",
+    "source": "ІМЗО"
   },
   {
     "id": "history11-gisem-profile",
