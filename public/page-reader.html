@@ -52,7 +52,7 @@ pdfjs.GlobalWorkerOptions.workerSrc="/vendor/pdfjs/pdf.worker.mjs";
 const $=id=>document.getElementById(id);
 const id=new URLSearchParams(location.search).get("id")||"history11-gisem-stand";
 const sourceURL="/api/printed-book/history11-gisem-stand.pdf";
-let book=null,doc=null,lessons=[],selected=null,pageNumber=5,seq=0,answerGiven=false,questionsCache=new Map();
+let book=null,doc=null,lessons=[],selected=null,pageNumber=5,seq=0,answerGiven=false,questionsCache=new Map(),readScrollHandler=null;
 const starterQuestions={
  5:{question:"Який період історії України розглядається в цьому підручнику?",options:["Лише Давня історія","Другий період Новітньої історії","Лише середньовіччя","Україна XVI століття"],correct:1,explanation:"Вступ пояснює, що курс присвячено подіям від 1945 року до початку XXI століття."},
  6:{question:"Яка міжнародна організація прийняла УРСР до складу держав-засновниць?",options:["Європейський Союз","НАТО","Організація Об’єднаних Націй","Рада Європи"],correct:2,explanation:"Українська РСР увійшла до складу ООН після Другої світової війни."},
@@ -69,6 +69,7 @@ function selectLesson(lesson,requestedPage){selected=lesson;pageNumber=Math.max(
 function getLessonByPage(n){return lessons.find(x=>n>=x.startPage&&n<=x.endPage)}
 async function showPage(){
  const token=++seq,lesson=selected;
+ if(readScrollHandler){window.removeEventListener("scroll",readScrollHandler);readScrollHandler=null;}
  answerGiven=false;$("askQuestion").disabled=true;$("askQuestion").textContent="🧠 Запитання після читання";
  $("nextPage").disabled=true;$("pageCanvas").hidden=true;$("paperStatus").hidden=false;$("paperStatus").textContent="Відкриваю сторінку "+pageNumber+"…";
  $("questionArea").replaceChildren();$("questionIntro").textContent="Спочатку прочитай цю сторінку. Потім натисни кнопку під нею — ШІ запитає тебе про прочитане.";
@@ -111,7 +112,8 @@ async function showPage(){
       window.removeEventListener("scroll",checkReadPosition);
     }
   };
-  window.addEventListener("scroll",checkReadPosition,{passive:true,once:false});
+  readScrollHandler=checkReadPosition;
+  window.addEventListener("scroll",readScrollHandler,{passive:true});
  }catch(e){if(token!==seq)return; $("paperStatus").textContent="Не вдалося відкрити сторінку. Джерело може бути тимчасово недоступним.";fallbackQuestion(token,"Не вдалося сформувати запитання.");console.error(e)}
 }
 function makeChoices(token,quiz,label){
@@ -183,8 +185,33 @@ async function start(){
   selected=lessons.find(x=>x.id===restored?.id)||lessons[0];
   pageNumber=restored?.page>=selected.startPage&&restored?.page<=selected.endPage?restored.page:selected.startPage;
   $("message").hidden=true;$("app").hidden=false;showPage();
- }catch(err){console.error(err);$("message").replaceChildren();
-  const h=document.createElement("h2");h.textContent="Не вдалося завантажити оригінальні сторінки.";const p=document.createElement("p");p.textContent="Спробуй оновити сторінку або відкрий офіційний примірник ІМЗО.";const a=document.createElement("a");a.href="https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf";a.textContent="Оригінальний підручник";a.target="_blank";a.rel="noopener";$("message").append(h,p,a)}
+ }catch(err){
+  console.error("Book loading failed",err);
+  $("message").replaceChildren();
+  const h=document.createElement("h2");
+  h.textContent="Не вдалося отримати сторінки з видавництва";
+  const p=document.createElement("p");
+  p.textContent="Спробуй повторити завантаження. Якщо джерело недоступне, можеш відкрити свій PDF тут — він не надсилатиметься на сайт і відображатиметься як сторінки книжки.";
+  $("message").append(h,p);
+  const retry=document.createElement("button");retry.className="primary";retry.textContent="Спробувати ще раз";
+  retry.onclick=()=>location.reload();$("message").append(retry);
+  const line=document.createElement("p");line.textContent="Або обери PDF цієї книги зі свого комп’ютера:";$("message").append(line);
+  const fileInput=document.createElement("input");fileInput.type="file";fileInput.accept="application/pdf";fileInput.setAttribute("aria-label","Вибрати PDF для читання без завантаження на сайт");
+  $("message").append(fileInput);
+  const errorMessage=document.createElement("p");errorMessage.className="error";$("message").append(errorMessage);
+  fileInput.addEventListener("change",async ()=>{
+    const file=fileInput.files?.[0];if(!file)return;
+    fileInput.disabled=true;errorMessage.textContent="Відкриваю сторінки…";
+    try{
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      doc=await pdfjs.getDocument({data:bytes}).promise;
+      if(doc.numPages<274)throw new Error("Це інший PDF: потрібен підручник Гісема й Мартинюка на 288 сторінок.");
+      if(!lessons.length)throw new Error("Не знайдено зміст книги на сайті.");
+      selected=lessons[0];pageNumber=selected.startPage;
+      $("message").hidden=true;$("app").hidden=false;showPage();
+    }catch(problem){errorMessage.textContent=problem.message||"Не вдалося прочитати файл.";fileInput.disabled=false}
+  });
+ }
 }
 start();
 </script>
