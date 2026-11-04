@@ -57,32 +57,106 @@ function assignPageRanges(items, pageCount, parentEnd=pageCount) {
 }
 
 function inferOutline(pages) {
-  const found = [];
-  const patterns = [
-    { type: "chapter", re: /^\s*(?:РОЗДІЛ|РОЗДІЛИ|ТЕМА)\s+(?:[IVXLC]+|\d+)?\s*[:.№—–-]?\s*\S.{2,100}$/i },
-    { type: "paragraph", re: /^\s*§\s*\d+[\w.-]*\s*[.—–:-]?\s*.{2,120}$/i },
-    { type: "paragraph", re: /^\s*ПАРАГРАФ\s+\d+[\w.-]*\s*[.—–:-]?\s*.{2,120}$/i }
-  ];
+  // Infer headings from lesson pages; never use the printed contents page as a lesson start.
+  const clean = value => String(value || "").replace(/\u00a0/g, " ").replace(/\s+/gu, " ").trim();
+  const paragraphRe = /^(?:§{1,2}\s*|ПАРАГРАФ\s+)(\d{1,3})(?!\d)\s*(?:[.:–—-]\s*)?(.*)$/iu;
+  const chapterRe = /^(РОЗДІЛ|РАЗДЕЛ|ЧАСТИНА|ЧАСТЬ|ТЕМА|МОДУЛЬ)\s+([IVXLCDMІХ]+|\d{1,2})(?![\p{L}\d])\s*(?:[.:–—-]\s*)?(.*)$/iu;
+  const tocRe = /^(ЗМІСТ|СОДЕРЖАНИЕ|ОГЛАВЛЕНИЕ)(?:$|\s|[.:])/iu;
+  const appendixRe = /^(ДОДАТКИ|ДОДАТОК|ПРИЛОЖЕНИЯ|ЛІТЕРАТУРА|БІБЛІОГРАФІЯ|ПОКАЖЧИК|СПИСОК ЛІТЕРАТУРИ)(?:$|\s|[.:])/iu;
+  const hintsRe = /^(ЗАПИТАННЯ|ЗАВДАННЯ|ПЕРЕВІРТЕ|ПРИГАДАЙТЕ|ПОМІРКУЙТЕ)/iu;
+  const pageCount = pages.length;
+  const found = [], endMarkers = [];
   for (const page of pages) {
-    const lines = page.text.split("\n").map(x => x.trim()).filter(Boolean);
-    for (const line of lines) {
-      const match = patterns.find(p => p.re.test(line));
-      if (!match) continue;
-      const title = line.replace(/\s+/g, " ").slice(0, 150);
-      if (found.some(x => x.title.toLocaleLowerCase() === title.toLocaleLowerCase())) continue;
-      found.push({ title, page: page.number, endPage: page.number, kind: match.type, children: [] });
+    const lines = String(page.text || "").split(/\r?\n/u).map(clean).filter(Boolean);
+    const distinct = new Set(lines.map(x => x.match(paragraphRe)?.[1]).filter(Boolean));
+    const dotted = lines.filter(x => /(?:\.{3,}|…{2,})/u.test(x)).length;
+    const printedContents = lines.slice(0, 15).some(x => tocRe.test(x)) ||
+      distinct.size >= 4 || (distinct.size >= 3 && dotted >= 1);
+    if (printedContents) continue;
+    if (page.number > pageCount / 2 && lines.slice(0, 12).some(x => appendixRe.test(x))) {
+      endMarkers.push(page.number);
+    }
+    // A heading should appear early enough on its page; later occurrences
+    // tend to be cross-references, captions or exercises.
+    const maxLine = Math.max(12, Math.ceil(lines.length * 0.55));
+    for (let i = 0; i < lines.length && i <= maxLine; i++) {
+      const line = lines[i], p = line.match(paragraphRe);
+      const c = p ? null : line.match(chapterRe);
+      if (!p && !c) continue;
+      const kind = p ? "paragraph" : "chapter";
+      const number = p ? Number(p[1]) : c[2].toUpperCase().replace(/І/gu,"I").replace(/Х/gu,"X");
+      if (p && (number < 1 || number > 250)) continue;
+      let label = clean(p ? p[2] : c[3]).replace(/(?:\.{3,}|…+)\s*\d+\s*$/u, "").trim();
+      // Headings may put the number on one line and the title on the next.
+      if (!label && i + 1 < lines.length) {
+        const next = lines[i + 1];
+        if (next.length >= 3 && next.length <= 110 && !paragraphRe.test(next) &&
+            !chapterRe.test(next) && !tocRe.test(next) && !appendixRe.test(next) &&
+            !hintsRe.test(next) && !/^\d+$/u.test(next)) label = next;
+      }
+      if (!label || label.length > 120 || /(?:\.{3,}|…{2,})/u.test(label)) continue;
+      // Don't accept normal sentences, page references or question-style captions.
+      if (/[!?]$/u.test(label) || /\b(?:сторінк[аи]|стор\.|стр\.)\s*\d+/iu.test(label)) continue;
+      const title = p ? `§ ${number}. ${label}` :
+        `${c[1][0].toUpperCase() + c[1].slice(1).toLowerCase()} ${c[2]}. ${label}`;
+      found.push({ kind, number, title, page: page.number, position: i,
+        key: c ? `${c[1].toUpperCase()}:${number}` : null });
     }
   }
-  found.sort((a,b) => a.page-b.page);
-  for (let i=0;i<found.length;i++) found[i].endPage = Math.max(found[i].page, (found[i+1]?.page || pages.length+1)-1);
-  const chapters = found.filter(x => x.kind === "chapter");
-  const paragraphs = found.filter(x => x.kind === "paragraph");
-  if (!chapters.length) return paragraphs;
-  for (const p of paragraphs) {
-    const parent = [...chapters].reverse().find(c => c.page <= p.page);
-    if (parent) { p.endPage = Math.min(p.endPage, parent.endPage || pages.length); parent.children.push(p); }
+  const byNumber = new Map();
+  for (const item of found.filter(x => x.kind === "paragraph")) {
+    if (!byNumber.has(item.number)) byNumber.set(item.number, []);
+    byNumber.get(item.number).push(item);
   }
-  return chapters;
+  // Do not invent missing paragraph numbers. Require a genuine § 1 start.
+  if (!byNumber.has(1)) return [];
+  const paras = [];
+  let lastPage = 0, lastPosition = -1, skipped = 0;
+  for (let num = 1; num <= Math.max(...byNumber.keys()); num++) {
+    const options = (byNumber.get(num) || []).filter(x =>
+      x.page > lastPage || (x.page === lastPage && x.position > lastPosition))
+      .sort((a,b) => a.page-b.page || a.position-b.position);
+    if (!options.length) {
+      if (++skipped >= 3) break;
+      continue;
+    }
+    const item = options[0];
+    paras.push(item);
+    lastPage = item.page;
+    lastPosition = item.position;
+    skipped = 0;
+  }
+  if (!paras.length) return [];
+  const ends = endMarkers.filter(x => x > paras[paras.length - 1].page);
+  const lastLessonPage = ends.length ? Math.min(...ends)-1 : pageCount;
+  const chaptersSeen = new Map();
+  for (const c of found.filter(x => x.kind === "chapter")
+      .sort((a,b) => a.page-b.page || a.position-b.position)) {
+    if (!chaptersSeen.has(c.key) && c.page <= paras[paras.length-1].page)
+      chaptersSeen.set(c.key, { ...c, children: [] });
+  }
+  const chapters = [...chaptersSeen.values()];
+  const before = (a,b) => a.page < b.page || (a.page === b.page && a.position <= b.position);
+  const result = [];
+  for (let i = 0; i < paras.length; i++) {
+    const para = paras[i], next = paras[i+1];
+    let end = next ? Math.max(para.page, next.page - 1) : Math.max(para.page,lastLessonPage);
+    // A section title on a separate page belongs to the new section.
+    const nextChapter = chapters.find(c => !before(c,para) && (!next || before(c,next)));
+    if (nextChapter && nextChapter.page > para.page) end = Math.min(end, nextChapter.page - 1);
+    const item = { title: para.title, page:para.page, endPage:end, kind:"paragraph", children:[] };
+    const parent = [...chapters].reverse().find(c => before(c,para));
+    if (parent) parent.children.push(item);
+    else result.push({ ...item, _position: para.position });
+  }
+  for (const ch of chapters) {
+    if (!ch.children.length) continue;
+    const end = ch.children[ch.children.length - 1].endPage;
+    result.push({ title: ch.title, page: ch.page, endPage:Math.max(ch.page,end),
+      kind:"chapter", children:ch.children, _position:ch.position });
+  }
+  result.sort((a,b) => a.page-b.page || a._position-b._position);
+  return result.map(({_position,...item}) => item);
 }
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Урокум" }));
@@ -107,9 +181,11 @@ app.post("/api/upload", upload.single("pdf"), async (req, res) => {
       const text = [...rows.entries()].sort((a,b) => b[0]-a[0]).map(([,parts]) => parts.join(" ").replace(/\s+/g," ").trim()).filter(Boolean).join("\n");
       pages.push({ number: n, text });
     }
-    let outline = await readOutline(pdf);
-    if (!outline.length) outline = inferOutline(pages);
-    else outline = assignPageRanges(outline, pdf.numPages);
+    let outline = inferOutline(pages);
+    if (!outline.length) {
+      outline = await readOutline(pdf);
+      if (outline.length) outline = assignPageRanges(outline, pdf.numPages);
+    }
     const record = { id, name: req.file.originalname, pageCount: pdf.numPages, pages, outline };
     await fs.rename(req.file.path, pdfPath(id));
     await fs.writeFile(bookPath(id), JSON.stringify(record), "utf8");
