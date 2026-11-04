@@ -12,7 +12,7 @@
 <main>
 <section id="home" class="panel"><span class="tag">ІНТЕРАКТИВНИЙ ПІДРУЧНИК</span><h1>Що будемо вивчати?</h1><p class="muted">Обери клас, щоб перейти до предметів і потрібного видання.</p><h2>Клас</h2><div class="grid" id="grades"></div></section>
 <section id="subjects" class="panel hidden"><button class="back" onclick="show('home')">← До класів</button><h1 id="subjectTitle"></h1><p class="muted">Обери предмет.</p><div class="grid" id="subjectGrid"></div></section>
-<section id="books" class="panel hidden"><button class="back" onclick="show('subjects')">← До предметів</button><h1 id="bookTitle"></h1><p class="muted">Обери конкретне видання за автором і рівнем або додай свій PDF.</p><div id="bookList"></div></section>
+<section id="books" class="panel hidden"><button class="back" onclick="show('subjects')">← До предметів</button><h1 id="bookTitle"></h1><p class="muted">Обери електронний підручник. Текст відкривається за параграфами, без PDF-файлу.</p><div id="bookList"></div></section>
 <section id="reader" class="panel hidden"><button class="back" onclick="show('books')">← До підручників</button><span class="tag">НАВЧАЛЬНИЙ ПРОСТІР</span><h1 id="readerHeading">Підручник</h1><p class="muted">Завантаж PDF цього видання. Сторінки, ілюстрації, таблиці та карти залишаються в оригінальному вигляді.</p>
 <div class="field"><label for="pdf"><b>PDF підручника</b></label><input id="pdf" type="file" accept="application/pdf"></div><div class="actions"><button class="primary" onclick="uploadPdf()">Завантажити PDF</button></div><div id="uploadStatus" class="status" role="status"></div>
 <div id="readerArea" class="hidden"><h2 id="pdfName"></h2><div class="reader-layout"><div class="reader-main"><div class="pdf-toolbar"><div class="page-controls"><button onclick="movePage(-1)" aria-label="Попередня сторінка">←</button><span>Стор.</span><input id="pageNumber" type="number" min="1" value="1" aria-label="Номер сторінки"><span id="pageTotal">/ 0</span><button onclick="movePage(1)" aria-label="Наступна сторінка">→</button><button onclick="goToPage()">Перейти</button></div><button onclick="openPdfTab()">Відкрити PDF ↗</button></div><iframe id="pdfFrame" class="pdf-frame" title="Оригінальні сторінки підручника"></iframe><p class="reader-note">Під час читання зміст праворуч дозволяє перейти безпосередньо до розділу або параграфа.</p>
@@ -27,9 +27,33 @@ const $=id=>document.getElementById(id);function show(id){sections.forEach(x=>$(
 const subjectsByGrade={1:['Українська мова','Математика','Я досліджую світ','Англійська мова'],2:['Українська мова','Математика','Я досліджую світ','Англійська мова'],3:['Українська мова','Математика','Я досліджую світ','Англійська мова'],4:['Українська мова','Математика','Я досліджую світ','Англійська мова'],5:['Українська мова','Математика','Історія','Пізнаємо природу','Англійська мова'],6:['Українська мова','Математика','Історія України','Всесвітня історія','Пізнаємо природу','Географія','Біологія','Англійська мова'],7:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],8:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],9:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],10:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],11:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова']};
 for(let i=1;i<=11;i++){let b=document.createElement('button');b.textContent=i+' клас';b.onclick=()=>chooseGrade(i);$('grades').append(b)}
 function chooseGrade(n){grade=n;$('subjectTitle').textContent=`${n} клас · Предмети`;$('subjectGrid').innerHTML='';(subjectsByGrade[n]||[]).forEach(s=>{let b=document.createElement('button');b.textContent=s;b.onclick=()=>chooseSubject(s);$('subjectGrid').append(b)});show('subjects')}
-function chooseSubject(s){subject=s;$('bookTitle').textContent=`${grade} клас · ${s}`;const list=$('bookList');list.innerHTML='';let examples=(grade===11&&s==='Історія України')?[{author:'Олександр Гісем, Олександр Мартинюк',level:'Рівень стандарту',year:'2019'},{author:'Олександр Гісем, Олександр Мартинюк',level:'Профільний рівень',year:'2019'},{author:'Наталія Сорочинська',level:'Рівень стандарту',year:'—'},{author:'Власов',level:'Стандартний / профільний — уточнити за виданням',year:'—'}]:[];
-if(examples.length){examples.forEach(x=>{let d=document.createElement('div');d.className='book';let info=document.createElement('div');let t=document.createElement('b');t.textContent=x.author;let p=document.createElement('p');p.className='muted';p.textContent=`${x.level} · ${x.year}`;info.append(t,p);let b=document.createElement('button');b.className='primary';b.textContent='Відкрити видання';b.onclick=()=>openBook(`${x.author} — ${x.level}`);d.append(info,b);list.append(d)})}else{let d=document.createElement('div');d.className='empty';d.textContent='Каталог перевірених видань для цього предмета ще не заповнений. Щоб не показувати вигаданих авторів, додай PDF свого підручника — його назву та автора можна вказати нижче.';list.append(d)}
-let own=document.createElement('div');own.className='book';own.innerHTML='<div><b>Власний підручник</b><p class="muted">Вкажи назву, автора й рівень, а потім завантаж PDF.</p></div>';let b=document.createElement('button');b.className='primary';b.textContent='Додати свій підручник';b.onclick=()=>openBook('Власний підручник');own.append(b);list.append(own);show('books')}
+async function chooseSubject(s){
+ subject=s;$('bookTitle').textContent=grade+' клас · '+s;
+ const list=$('bookList');list.replaceChildren();
+ const status=document.createElement('div');status.className='muted';status.textContent='Шукаю електронні видання…';list.append(status);
+ show('books');
+ try{
+  const response=await fetch('/books/catalog.json',{cache:'no-store'});
+  if(!response.ok)throw Error('Не вдалося відкрити каталог');
+  const catalog=await response.json();
+  const books=catalog.filter(x=>x.grade===grade&&x.subject===s);
+  list.replaceChildren();
+  if(!books.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Електронні підручники для цього предмета ще готуються. Після додавання тексту книги тут з’являться параграфи для читання.';list.append(empty);return}
+  for(const x of books){
+   const wrapper=document.createElement('div');wrapper.className='book';
+   const info=document.createElement('div');
+   const heading=document.createElement('b');heading.textContent=x.title+' · '+x.author;
+   const subtitle=document.createElement('p');subtitle.className='muted';
+   subtitle.textContent=x.level+(x.year?' · '+x.year:'')+(x.demo?' · Навчальний приклад':'');
+   info.append(heading,subtitle);
+   const button=document.createElement('button');button.className='primary';
+   button.textContent=x.available?'Читати електронний підручник':'Електронна версія готується';
+   button.disabled=!x.available;
+   if(x.available)button.onclick=()=>{location.href='/e-reader.html?id='+encodeURIComponent(x.id)};
+   wrapper.append(info,button);list.append(wrapper);
+  }
+ }catch(error){list.replaceChildren();const msg=document.createElement('div');msg.className='empty';msg.textContent='Не вдалося завантажити електронний каталог: '+error.message;list.append(msg)}
+}
 function openBook(name){book=name;$('readerHeading').textContent=book;$('readerArea').classList.add('hidden');$('uploadStatus').textContent='';$('pdf').value='';show('reader')}
 async function uploadPdf(){let f=$('pdf').files[0],s=$('uploadStatus');if(!f){s.textContent='Спочатку вибери PDF-файл.';return}let data=new FormData();data.append('pdf',f);s.textContent='Аналізую PDF: шукаю зміст, розділи та параграфи…';try{let r=await fetch('/api/upload',{method:'POST',body:data}),j=await r.json();if(!r.ok)throw Error(j.error);bookId=j.id;pageCount=j.pageCount;currentPage=1;outline=j.outline||[];$('pdfName').textContent=j.name;$('pageTotal').textContent='/ '+pageCount;$('pageNumber').max=pageCount;$('pageNumber').value=1;$('pdfFrame').src=`/api/book/${bookId}/file#page=1&view=FitH`;renderOutline();$('readerArea').classList.remove('hidden');s.textContent=`PDF завантажено · ${pageCount} сторінок · знайдено пунктів змісту: ${countOutline(outline)}.`;await loadPage(1)}catch(e){s.textContent=e.message}}
 function countOutline(items){return items.reduce((n,x)=>n+1+countOutline(x.children||[]),0)}
