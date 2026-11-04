@@ -162,34 +162,82 @@ function inferOutline(pages) {
 
 // Stream the original textbook from the official IMZO library. No copyrighted
 // PDF binary is copied into GitHub; pages are drawn by PDF.js in the browser.
-const HISTORY11_PDF_SOURCE = "https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf";
-app.use("/vendor/pdfjs", express.static(path.join(__dirname, "node_modules/pdfjs-dist/build")));
-app.get("/api/printed-book/history11-gisem-stand.pdf", async (req, res) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+// The original textbook is fetched from its publisher or the official IMZO library
+// and rendered by PDF.js, not embedded as text-only HTML. Cache in memory so page
+// navigation stays fast and repeated requests don't burden the source servers.
+const HISTORY11_PDF_SOURCES = [
+  "https://www.ranok.com.ua/resources/IstUkr-stand-11kl_Gisem.pdf",
+  "https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf",
+  "https://downloads.aunivers.no/ukraina/11.klasse_Historie_Ukrainsk_historie_%D0%86%D1%81%D1%82%D0%BE%D1%80%D1%96%D1%8F_%D0%A3%D0%BA%D1%80%D0%B0%D1%97%D0%BD%D0%B8.pdf"
+];
+let history11PdfPromise = null;
+async function getHistory11Pdf() {
+  if (!history11PdfPromise) {
+    history11PdfPromise = (async () => {
+      let lastError = new Error("No textbook source was reachable");
+      for (const sourceURL of HISTORY11_PDF_SOURCES) {
+        try {
+          const response = await fetch(sourceURL, {
+            headers: {"Accept":"application/pdf","User-Agent":"UrokumTextbookReader/1.0"},
+            signal: AbortSignal.timeout(25000),
+            redirect:"follow"
+          });
+          if (!response.ok) throw new Error("HTTP "+response.status);
+          const length = Number(response.headers.get("content-length")||0);
+          if (length > 25 * 1024 * 1024) throw new Error("Unexpected PDF size");
+          const data = Buffer.from(await response.arrayBuffer());
+          if (data.length < 500000 || data.length > 25*1024*1024 ||
+              data.subarray(0,5).toString("ascii") !== "%PDF-")
+            throw new Error("Response is not the textbook PDF");
+          console.log("History 11 textbook source verified:", new URL(sourceURL).hostname, data.length, "bytes");
+          return data;
+        } catch (error) {
+          lastError = error;
+          console.warn("Textbook source not available:", new URL(sourceURL).hostname, error.message);
+        }
+      }
+      throw lastError;
+    })().catch(error => { history11PdfPromise = null; throw error; });
+  }
+  return history11PdfPromise;
+}
+app.use("/vendor/pdfjs", express.static(path.join(__dirname,"node_modules/pdfjs-dist/build")));
+app.get("/api/printed-book/history11-gisem-stand.pdf", async (req,res) => {
   try {
-    const headers = { "Accept": "application/pdf" };
-    if (req.headers.range && /^bytes=\\d+-\\d*$/i.test(req.headers.range)) headers.Range = req.headers.range;
-    const upstream = await fetch(HISTORY11_PDF_SOURCE, { headers, signal: controller.signal });
-    if (!upstream.ok || !upstream.body) throw new Error("IMZO PDF download failed: " + upstream.status);
-    res.status(upstream.status);
-    for (const name of ["content-length", "content-range", "accept-ranges"]) {
-      const value = upstream.headers.get(name);
-      if (value) res.setHeader(name, value);
+    const data = await getHistory11Pdf();
+    const size = data.length;
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Accept-Ranges","bytes");
+    res.setHeader("Cache-Control","public, max-age=86400");
+    res.setHeader("Content-Disposition","inline");
+    const match = /^bytes=(\d+)-(\d*)$/i.exec(req.headers.range||"");
+    if (req.headers.range && !match) {
+      res.setHeader("Content-Range", "bytes */"+size);
+      return res.status(416).end();
     }
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    res.setHeader("Content-Disposition", "inline");
-    Readable.fromWeb(upstream.body).on("error", e => { console.error("PDF stream error", e); res.destroy(e); }).pipe(res);
-    res.on("close", () => { clearTimeout(timeout); if (!res.writableEnded) controller.abort(); });
+    if (match) {
+      const first = Number(match[1]);
+      const last = match[2] ? Number(match[2]) : size-1;
+      if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) ||
+          first >= size || last < first) {
+        res.setHeader("Content-Range", "bytes */"+size);
+        return res.status(416).end();
+      }
+      const actualLast = Math.min(last, size-1);
+      const chunk = data.subarray(first, actualLast+1);
+      res.status(206);
+      res.setHeader("Content-Range", "bytes "+first+"-"+actualLast+"/"+size);
+      res.setHeader("Content-Length", chunk.length);
+      return res.end(chunk);
+    }
+    res.setHeader("Content-Length", size);
+    return res.end(data);
   } catch (error) {
-    clearTimeout(timeout);
-    console.error("Original textbook load failed", error);
-    if (!res.headersSent) res.status(502).json({error:"Не вдалося завантажити офіційне видання ІМЗО. Спробуйте пізніше."});
-    else res.destroy(error);
+    console.error("Textbook PDF load failed", error);
+    if (!res.headersSent)
+      res.status(503).json({error:"Книга тимчасово недоступна. Не вдалося отримати файл від офіційних джерел."});
   }
 });
-
 app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Урокум" }));
 
 app.post("/api/upload", upload.single("pdf"), async (req, res) => {
