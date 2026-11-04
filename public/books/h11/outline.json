@@ -1,0 +1,269 @@
+{
+  "id": "history11-gisem-stand",
+  "title": "Історія України. 11 клас. Рівень стандарту",
+  "author": "Олександр Гісем, Олександр Мартинюк",
+  "year": 2019,
+  "grade": 11,
+  "subject": "Історія України",
+  "sourceCredit": "Офіційний електронний примірник — Інститут модернізації змісту освіти (ІМЗО)",
+  "mode": "printed",
+  "contents": [
+    {
+      "id": "p1",
+      "type": "paragraph",
+      "title": "§ 1. Вступ",
+      "startPage": 5,
+      "endPage": 12
+    },
+    {
+      "id": "c1",
+      "type": "chapter",
+      "title": "Розділ 1. Україна в перші післявоєнні роки",
+      "startPage": 13,
+      "endPage": 44,
+      "children": [
+        {
+          "id": "p2",
+          "type": "paragraph",
+          "title": "§ 2. Адміністративно-територіальні зміни й зовнішньополітична діяльність УРСР",
+          "startPage": 13,
+          "endPage": 19
+        },
+        {
+          "id": "p3",
+          "type": "paragraph",
+          "title": "§ 3. Внутрішньополітична та економічна ситуація в УРСР",
+          "startPage": 20,
+          "endPage": 27
+        },
+        {
+          "id": "p4",
+          "type": "paragraph",
+          "title": "§ 4. Політика радянізації та репресії в західних областях УРСР",
+          "startPage": 28,
+          "endPage": 36
+        },
+        {
+          "id": "p5",
+          "type": "paragraph",
+          "title": "§ 5. Культура України в перші післявоєнні роки",
+          "startPage": 37,
+          "endPage": 44
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "type": "chapter",
+      "title": "Розділ 2. Україна в умовах десталінізації",
+      "startPage": 46,
+      "endPage": 81,
+      "children": [
+        {
+          "id": "p6",
+          "type": "paragraph",
+          "title": "§ 6. УРСР на початку десталінізації",
+          "startPage": 46,
+          "endPage": 51
+        },
+        {
+          "id": "p7",
+          "type": "paragraph",
+          "title": "§ 7. Суспільно-політичне життя в Україні",
+          "startPage": 52,
+          "endPage": 56
+        },
+        {
+          "id": "p8",
+          "type": "paragraph",
+          "title": "§ 8. Розвиток економіки",
+          "startPage": 57,
+          "endPage": 64
+        },
+        {
+          "id": "p9",
+          "type": "paragraph",
+          "title": "§ 9. Національно-визвольний рух. «Шістдесятництво»",
+          "startPage": 65,
+          "endPage": 71
+        },
+        {
+          "id": "p10",
+          "type": "paragraph",
+          "title": "§ 10. Культура та духовне життя в УРСР",
+          "startPage": 72,
+          "endPage": 81
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "type": "chapter",
+      "title": "Розділ 3. Україна в період загострення кризи радянської системи",
+      "startPage": 83,
+      "endPage": 129,
+      "children": [
+        {
+          "id": "p11",
+          "type": "paragraph",
+          "title": "§ 11. Наростання кризових явищ у суспільно-політичному житті республіки",
+          "startPage": 83,
+          "endPage": 87
+        },
+        {
+          "id": "p12",
+          "type": "paragraph",
+          "title": "§ 12. Економічна ситуація в УРСР",
+          "startPage": 88,
+          "endPage": 95
+        },
+        {
+          "id": "p13",
+          "type": "paragraph",
+          "title": "§ 13. Зміни у складі та соціальній структурі населення",
+          "startPage": 96,
+          "endPage": 103
+        },
+        {
+          "id": "p14",
+          "type": "paragraph",
+          "title": "§ 14. Дисидентський рух",
+          "startPage": 104,
+          "endPage": 115
+        },
+        {
+          "id": "p15",
+          "type": "paragraph",
+          "title": "§ 15. Розвиток культури й духовного життя",
+          "startPage": 116,
+          "endPage": 129
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "type": "chapter",
+      "title": "Розділ 4. Відновлення незалежності України",
+      "startPage": 131,
+      "endPage": 165,
+      "children": [
+        {
+          "id": "p16",
+          "type": "paragraph",
+          "title": "§ 16. Початок «перебудови» в СРСР і УРСР",
+          "startPage": 131,
+          "endPage": 138
+        },
+        {
+          "id": "p17",
+          "type": "paragraph",
+          "title": "§ 17. Поглиблення кризових явищ в економіці. Шахтарський страйк 1989 р. Політичні реформи",
+          "startPage": 139,
+          "endPage": 144
+        },
+        {
+          "id": "p18",
+          "type": "paragraph",
+          "title": "§ 18. Зростання громадської активності українського суспільства. Проголошення Декларації про державний суверенітет України",
+          "startPage": 145,
+          "endPage": 157
+        },
+        {
+          "id": "p19",
+          "type": "paragraph",
+          "title": "§ 19. Проголошення Україною незалежності",
+          "startPage": 158,
+          "endPage": 165
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "type": "chapter",
+      "title": "Розділ 5. Становлення України як незалежної держави",
+      "startPage": 167,
+      "endPage": 230,
+      "children": [
+        {
+          "id": "p20",
+          "type": "paragraph",
+          "title": "§ 20. Державотворчі процеси в перші роки незалежності",
+          "startPage": 167,
+          "endPage": 178
+        },
+        {
+          "id": "p21",
+          "type": "paragraph",
+          "title": "§ 21. Україна в 1994—1999 рр",
+          "startPage": 179,
+          "endPage": 184
+        },
+        {
+          "id": "p22",
+          "type": "paragraph",
+          "title": "§ 22. Політичні процеси в Україні в 1999—2005 рр. «Помаранчева революція»",
+          "startPage": 185,
+          "endPage": 192
+        },
+        {
+          "id": "p23",
+          "type": "paragraph",
+          "title": "§ 23. Економічний розвиток України в 1992—2005 рр",
+          "startPage": 193,
+          "endPage": 202
+        },
+        {
+          "id": "p24",
+          "type": "paragraph",
+          "title": "§ 24. Етносоціальні процеси та рівень життя населення",
+          "startPage": 203,
+          "endPage": 210
+        },
+        {
+          "id": "p25",
+          "type": "paragraph",
+          "title": "§ 25. Зовнішня політика та міжнародні зв’язки України у 1992—2010 рр",
+          "startPage": 211,
+          "endPage": 223
+        },
+        {
+          "id": "p26",
+          "type": "paragraph",
+          "title": "§ 26. Суспільно-політичне та економічне життя України у 2005—2010 рр",
+          "startPage": 224,
+          "endPage": 230
+        }
+      ]
+    },
+    {
+      "id": "c6",
+      "type": "chapter",
+      "title": "Розділ 6. Творення нової України",
+      "startPage": 232,
+      "endPage": 274,
+      "children": [
+        {
+          "id": "p27",
+          "type": "paragraph",
+          "title": "§ 27. Україна у 2010—2014 рр. Революція Гідності",
+          "startPage": 232,
+          "endPage": 240
+        },
+        {
+          "id": "p28",
+          "type": "paragraph",
+          "title": "§ 28. Україна в системі міжнародних відносин. Збройна агресія Росії",
+          "startPage": 241,
+          "endPage": 261
+        },
+        {
+          "id": "p29",
+          "type": "paragraph",
+          "title": "§ 29. Культурне та релігійне життя",
+          "startPage": 262,
+          "endPage": 274
+        }
+      ]
+    }
+  ]
+}
