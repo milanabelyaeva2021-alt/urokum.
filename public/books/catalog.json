@@ -1,0 +1,54 @@
+[
+  {
+    "id": "history11-demo",
+    "grade": 11,
+    "subject": "Історія України",
+    "author": "Урокум",
+    "title": "Історія України — приклад електронного читання",
+    "level": "Демонстрація інтерфейсу",
+    "year": "",
+    "available": true,
+    "demo": true,
+    "file": "books/history11-demo.json"
+  },
+  {
+    "id": "history11-gisem-stand",
+    "grade": 11,
+    "subject": "Історія України",
+    "author": "Олександр Гісем, Олександр Мартинюк",
+    "title": "Історія України. 11 клас",
+    "level": "Рівень стандарту",
+    "year": "2019",
+    "available": false
+  },
+  {
+    "id": "history11-gisem-profile",
+    "grade": 11,
+    "subject": "Історія України",
+    "author": "Олександр Гісем, Олександр Мартинюк",
+    "title": "Історія України. 11 клас",
+    "level": "Профільний рівень",
+    "year": "2019",
+    "available": false
+  },
+  {
+    "id": "history11-sorochynska",
+    "grade": 11,
+    "subject": "Історія України",
+    "author": "Наталія Сорочинська",
+    "title": "Історія України. 11 клас",
+    "level": "Уточнюється",
+    "year": "",
+    "available": false
+  },
+  {
+    "id": "history11-vlasov",
+    "grade": 11,
+    "subject": "Історія України",
+    "author": "Віталій Власов",
+    "title": "Історія України. 11 клас",
+    "level": "Уточнюється",
+    "year": "",
+    "available": false
+  }
+]
