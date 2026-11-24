@@ -48,14 +48,17 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 <aside class="sidebar"><h2>Зміст підручника</h2><div id="toc"></div></aside>
 <main class="paperPanel">
  <div class="paperToolbar"><div class="pageLabel"><strong id="lessonName"></strong><span id="pageInfo"></span></div><button id="exitFull" onclick="toggleFull(false)">← До змісту</button></div>
- <div class="read-tools"><label>📖 Відкрити свій PDF <input id="localPdf" type="file" accept=".pdf,application/pdf"></label><button id="askSelected" disabled>🧠 Питання за виділеним</button></div>
+ <div class="read-tools" id="pdfRecovery" hidden>
+ <p class="muted">Не вдалося завантажити сторінки автоматично. Можна відкрити файл із комп’ютера — він залишиться лише у твоєму браузері.</p>
+ <label>Вибрати файл підручника <input id="localPdf" type="file" accept=".pdf,application/pdf"></label>
+</div>
 <div id="paper"><div id="paperStatus">Готую сторінку…</div><div id="pageSurface" hidden><canvas id="pageCanvas" aria-label="Оригінальна сторінка підручника"></canvas><div id="pdfText"></div></div></div>
-<div id="activeExcerpt"></div><div id="guideNote">Читай підсвічений пункт цілком; після нього будуть три запитання.</div>
+<div id="guideNote">Читай підсвічений пункт цілком; після нього будуть три запитання.</div>
  <div class="controls"><button id="prevPage">← Попередня</button><button id="askQuestion" class="primary" disabled>🧠 Пункт прочитано — 3 запитання</button><button id="nextPage" disabled>Наступна сторінка →</button></div>
  <div class="status muted">Сторінки відтворюються в оригінальному оформленні: текст, таблиці, карти й ілюстрації.</div>
 </main>
 <section class="questions" aria-live="polite">
- <h2>🧠 Учитель-ШІ</h2><p class="muted">Після кожного цілого пункту підручника — три запитання.</p>
+ <h2>🧠 Учитель-ШІ</h2><p class="muted" id="aiStatus">Перевіряю, чи підключено ШІ…</p><p class="muted">Після кожного цілого пункту підручника — три запитання.</p>
  <p class="muted" id="questionIntro">Прочитай увесь пункт. Якщо він займає кілька сторінок, спочатку перегорни їх.</p>
  <div id="questionArea"></div>
  <div class="source">Оригінальна книга: <a href="https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf" target="_blank" rel="noopener">ІМЗО</a>.</div>
