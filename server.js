@@ -329,7 +329,9 @@ app.post("/api/tutor", async (req, res) => {
   const { text, task } = req.body || {};
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
   if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Власник сайту має додати OPENAI_API_KEY у налаштуваннях хостингу." });
-  const prompt = task === "test"
+  const prompt = task === "multi-checkpoint"
+    ? 'Створи РІВНО 3 різні змістовні тестові запитання українською за прочитаним ПОВНИМ пунктом підручника. Перевіряй розуміння причин, наслідків, фактів та понять лише з наведеного тексту. Не повторюй запитання. Поверни ЛИШЕ валідний JSON без markdown у форматі {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. У масиві questions повинно бути саме три об’єкти; індекс correct — ціле число 0..3. Не включай у відповідь інші поля й не вигадуй фактів.'
+    : task === "test"
     ? "Створи 5 тестових запитань українською за фрагментом. Для кожного дай 4 варіанти (А, Б, В, Г), вкажи правильну відповідь і коротке пояснення. Не додавай фактів поза текстом."
     : task === "checkpoint"
       ? "Створи ОДНЕ контрольне запитання для паузи під час читання. Поверни ЛИШЕ валідний JSON без markdown у форматі: {\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":0,\"explanation\":\"...\"}. correct — індекс правильної відповіді від 0 до 3. Усе має перевіряти знання саме з цього тексту."
@@ -343,10 +345,21 @@ app.post("/api/tutor", async (req, res) => {
     const data = await response.json();
     if (!response.ok) return res.status(502).json({ error: data.error?.message || "Помилка під час звернення до ШІ." });
     const output = (data.output || []).flatMap(x => x.content || []).filter(x => x.type === "output_text").map(x => x.text).join("\n");
-    if (task === "checkpoint") {
-      const cleaned = output.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-      try { return res.json({ quiz: JSON.parse(cleaned) }); }
-      catch { return res.json({ answer: "Не вдалося сформувати контрольне запитання. Спробуй ще раз." }); }
+    if (task === "multi-checkpoint" || task === "checkpoint") {
+      const cleaned=output.replace(/^\`\`\`(?:json)?\s*/i,"").replace(/\`\`\`\s*$/i,"").trim();
+      try{
+        const parsed=JSON.parse(cleaned);
+        if(task==="checkpoint")return res.json({quiz:parsed});
+        const qs=parsed.questions;
+        if(!Array.isArray(qs)||qs.length!==3||qs.some(q=>
+          typeof q.question!=="string"||!Array.isArray(q.options)||q.options.length!==4||
+          q.options.some(x=>typeof x!=="string")||!Number.isInteger(q.correct)||q.correct<0||q.correct>3))
+          throw Error("Wrong quiz structure");
+        return res.json({questions:qs});
+      }catch(error){
+        console.warn("AI quiz JSON invalid",error.message);
+        return res.status(502).json({error:"ШІ не повернув три коректні запитання. Спробуй ще раз."});
+      }
     }
     res.json({ answer: output || "Не вдалося отримати відповідь." });
   } catch { res.status(502).json({ error: "Не вдалося зв'язатися із сервісом ШІ." }); }
