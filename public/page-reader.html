@@ -33,12 +33,19 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 #pdfText{position:absolute;inset:0;overflow:hidden;opacity:1;line-height:1;text-align:initial;text-size-adjust:none;forced-color-adjust:none;user-select:text;z-index:2}
 #pdfText span,#pdfText br{position:absolute;white-space:pre;color:transparent;cursor:text;transform-origin:0 0;user-select:text}
 #pdfText ::selection{background:rgba(126,85,215,.46)}
-#pdfText span.read-focus{background:rgba(255,213,76,.34);border-radius:2px}
+#pdfText span.read-focus{background:rgba(255,196,35,.72)!important;mix-blend-mode:multiply;box-shadow:0 0 0 1px rgba(232,161,0,.36);border-radius:2px}
 .read-tools{display:flex;align-items:center;flex-wrap:wrap;gap:9px;width:100%}
 .read-tools label{background:#f6f1fa;padding:9px 12px;border-radius:9px;border:1px solid #e7dbef;font-size:13px}
 .read-tools input{max-width:190px;font-size:13px}
 #activeExcerpt{font-size:13px;color:#68518f;line-height:1.5}
 #guideNote{background:#f6f0ff;color:#5e408d;padding:12px;border-radius:11px;line-height:1.5;width:100%}
+
+.q-done{border:1px solid #d8c6ec;background:#f8f4ff;border-radius:16px;padding:18px 15px;text-align:center;display:flex;flex-direction:column;align-items:stretch;gap:12px}
+.q-done-icon{font-size:30px;color:#5b3599;line-height:1.2}
+.q-done h3{margin:0;font-size:19px;color:#3e286a}
+.q-done p{margin:0;color:#655579;line-height:1.5;font-size:14px}
+.q-done .primary{width:100%;padding:14px 12px;line-height:1.35;font-weight:750}
+#questionArea{min-width:0}
 </style>
 </head>
 <body>
@@ -58,10 +65,10 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
  <div class="status muted">Сторінки відтворюються в оригінальному оформленні: текст, таблиці, карти й ілюстрації.</div>
 </main>
 <section class="questions" aria-live="polite">
- <h2>🧠 Учитель-ШІ</h2><p class="muted" id="aiStatus">Перевіряю, чи підключено ШІ…</p><p class="muted">Після кожного цілого пункту підручника — три запитання.</p>
- <p class="muted" id="questionIntro">Прочитай увесь пункт. Якщо він займає кілька сторінок, спочатку перегорни їх.</p>
+ <h2>🧠 Учитель-ШІ</h2>
+ <p id="questionIntro" hidden></p>
  <div id="questionArea"></div>
- <div class="source">Оригінальна книга: <a href="https://lib.imzo.gov.ua/wa-data/public/site/books2/pidruchnyky-11-klas-2019/04-istoriya-ukrainy-11-klas/istoriia-ukrainy-riven-standartu-pidruchnyk-dlia-11-klasu-zzso-o-v-gisem-o-o-martyniuk.pdf" target="_blank" rel="noopener">ІМЗО</a>.</div>
+ 
 </section>
 </div>
 <script type="module" src="/point-reader-v3.js"></script>
