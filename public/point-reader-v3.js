@@ -222,7 +222,7 @@ function setButtons(){
  $("guideNote").textContent="§ "+(lessonIndex+1)+" · Пункт "+pointStart().number+
  " із "+pointStarts().length+" · стор. "+pointStart().page+"–"+pointLastPage()+
  (answered?" · ✓ Перевірено":last?" · 3 запитання":"");
- $("questionIntro").textContent="Урокум підсвічує жовтим текст поточного пункту. Виділяй слова мишкою або читай весь пункт до кінця.";
+
 }
 async function renderPage(){
  if(!pdf||!lessons.length)return;
