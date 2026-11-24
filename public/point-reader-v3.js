@@ -13,7 +13,8 @@ let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTex
 const fallbackFirstPoint=[
  {question:"Який період історії України вивчають у цьому підручнику?",options:["Період Київської Русі","Другий період Новітньої історії України","Стародавню історію України","Історію Галицько-Волинської держави"],correct:1,explanation:"Вступ охоплює події з 1945 року до початку XXI століття."},
  {question:"Для чого історики використовують періодизацію?",options:["Щоб поділити історичний розвиток на етапи","Щоб запам’ятати імена всіх правителів","Щоб замінити історичні джерела","Щоб не досліджувати минуле"],correct:0,explanation:"Історичні періоди допомагають упорядкувати політичні, соціальні й культурні зміни."},
- {question:"Який період Новітньої історії України передував періоду після 1945 року?",options:["1914—1945 роки","XVI—XVIII століття","Середньовіччя","Лише 1991 рік"],correct:0,explanation:"У таблиці подано перший період Новітньої історії — 1914—1945 роки."}
+ {question:"Який період Новітньої історії України передував періоду після 1945 року?",options:["1914—1945 роки","XVI—XVIII століття","Середньовіччя","Лише 1991 рік"],correct:0,explanation:"У таблиці подано перший період Новітньої історії — 1914—1945 роки."},
+ {question:"Яка подія пов’язана з початком другого періоду Новітньої історії?",options:["Завершення Другої світової війни","Утворення Київської Русі","Люблінська унія","Початок Першої світової війни"],correct:0,explanation:"У підручнику другий період Новітньої історії починається з 1945 року."}
 ];
 const style=document.createElement("style");
 style.textContent=
@@ -260,13 +261,13 @@ function setButtons(){
  if(last&&completedPoints.has(pointKey()))answered=true;
  $("askQuestion").disabled=!pdf||!last||answered;
  $("nextPage").disabled=!pdf||(last&&!answered);
- $("askQuestion").textContent=answered?"✓ Пункт перевірено":"🧠 Пункт прочитано — 3 запитання";
+ $("askQuestion").textContent=answered?"✓ Пункт перевірено":"🧠 Пункт прочитано — 4 запитання";
  $("nextPage").textContent=!last?"Наступна сторінка →":
   pointIndex<pointStarts().length-1?"Наступний пункт →":
   lessonIndex<lessons.length-1?"Наступний параграф →":"Завершити ✓";
  $("guideNote").textContent="§ "+(lessonIndex+1)+" · Пункт "+pointStart().number+
  " із "+pointStarts().length+" · стор. "+pointStart().page+"–"+pointLastPage()+
- (answered?" · ✓ Перевірено":last?" · 3 запитання":"");
+ (answered?" · ✓ Перевірено":last?" · 4 запитання":"");
 
 }
 async function renderPage(){
@@ -329,10 +330,42 @@ $("askQuestion").onclick=async()=>{
  if(!atPointEnd()||answered||quizzing)return;
  isSelectionQuiz=false;
  $("askQuestion").disabled=true;
- $("questionArea").textContent="Готую три запитання за всім пунктом…";
+ $("questionArea").textContent="Готую чотири запитання за всім пунктом…";
  try{await startQuiz(await pointText())}
  catch(error){showReflections("Не вдалося прочитати текст пункту: "+error.message)}
 };
+
+$("sendStudentQuestion").onclick=async()=>{
+ const question=$("studentQuestion").value.trim();
+ const responseArea=$("studentAnswer");
+ if(!question||question.length<3){responseArea.textContent="Напиши запитання про цей пункт.";return}
+ if(!pdf){responseArea.textContent="Спочатку відкрий підручник.";return}
+ const button=$("sendStudentQuestion"),readingGeneration=generation;
+ button.disabled=true;
+ button.textContent="ШІ шукає відповідь…";
+ responseArea.textContent="";
+ try{
+  const text=await pointText();
+  if(readingGeneration!==generation)return;
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),30000);
+  let response;
+  try{response=await fetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({task:"ask-question",question,text}),signal:controller.signal});
+  }finally{clearTimeout(timeout)}
+  const data=await response.json();
+  if(readingGeneration!==generation)return;
+  if(!response.ok)throw Error(data.error||"ШІ не зміг відповісти.");
+  responseArea.textContent=data.answer||"ШІ не знайшов відповіді в цьому пункті.";
+ }catch(error){
+  if(readingGeneration===generation)responseArea.textContent=error.name==="AbortError"
+   ?"Відповідь затримується. Спробуй ще раз.":"Не вдалося отримати відповідь: "+error.message;
+ }finally{
+  button.disabled=false;
+  button.textContent="Запитати ШІ";
+ }
+};
+
 function validQuestion(q){
  return !!(q&&typeof q.question==="string"&&q.question.trim()&&
   Array.isArray(q.options)&&q.options.length===4&&q.options.every(x=>typeof x==="string")&&
@@ -344,7 +377,7 @@ async function startQuiz(text){
  const key=(isSelectionQuiz?"selection":"point")+":"+lessons[lessonIndex].id+":"+pointIndex+":"+text.slice(0,100);
  const cached=questionCache.get(key);
  if(cached){showQuestions(cached);return}
- $("questionArea").textContent="ШІ складає 3 запитання…";
+ $("questionArea").textContent="ШІ складає 4 запитання…";
  try{
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
   let response;
@@ -358,7 +391,7 @@ async function startQuiz(text){
   showQuestions(result.questions);
  }catch(err){
   if(!isSelectionQuiz&&lessonIndex===0&&pointIndex===0){
-   showQuestions(fallbackFirstPoint,"3 підготовлені запитання. ШІ не підключено.");
+   showQuestions(fallbackFirstPoint,"4 підготовлені запитання. ШІ тимчасово недоступний.");
   }else{showReflections("ШІ не створив запитання: "+err.message)}
  }
 }
@@ -370,7 +403,7 @@ function showQuizCompletion(alreadyDone=false){
  const description=document.createElement("p");
  description.textContent=alreadyDone
    ?"Результат збережений. Можеш продовжити з наступного пункту."
-   :"Ти відповіла на всі три запитання. Прогрес збережено.";
+   :"Ти відповіла на всі чотири запитання. Прогрес збережено.";
  const continueButton=document.createElement("button");
  continueButton.className="primary";
  continueButton.textContent=pointIndex<pointStarts().length-1?"Наступний пункт →":
@@ -427,20 +460,21 @@ function showReflections(reason){
  const questions=[
   "Яка головна думка цього пункту?",
   "Назви дві важливі події, поняття або дати з прочитаного.",
-  "Як цей пункт пов’язаний із темою параграфа?"
+  "Як цей пункт пов’язаний із темою параграфа?",
+  "Яку деталь із прочитаного ти вважаєш найважливішою та чому?"
  ];
  let index=0;
  const area=$("questionArea");
  const draw=()=>{
   area.replaceChildren();
   const note=document.createElement("p");note.className="q-progress";
-  note.textContent="Самоперевірка · "+(index+1)+"/3";
+  note.textContent="Самоперевірка · "+(index+1)+"/"+questions.length;
   const h=document.createElement("h3");h.textContent=questions[index];
   const explanation=document.createElement("p");explanation.className="muted";explanation.textContent=reason;
   const input=document.createElement("textarea");input.rows=4;input.placeholder="Напиши відповідь своїми словами…";input.style.width="100%";
   const next=document.createElement("button");next.className="primary";
-  next.textContent=index===2?"Завершити":"Наступне питання →";
-  next.onclick=()=>{if(!input.value.trim()){input.focus();return}index++;if(index===3)afterQuiz();else draw()};
+  next.textContent=index===questions.length-1?"Завершити":"Наступне питання →";
+  next.onclick=()=>{if(!input.value.trim()){input.focus();return}index++;if(index===questions.length)afterQuiz();else draw()};
   area.append(note,h,explanation,input,next);
  };draw();
 }
