@@ -239,7 +239,7 @@ app.get("/api/printed-book/history11-gisem-stand.pdf", async (req,res) => {
   }
 });
 app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Урокум" }));
-app.get("/api/ai-status", (_req, res) => res.json({ configured: Boolean(process.env.OPENAI_API_KEY) }));
+app.get("/api/ai-status", (_req, res) => res.json({ configured: Boolean(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY), provider: process.env.GROQ_API_KEY ? "groq" : (process.env.OPENAI_API_KEY ? "openai" : null) }));
 
 app.post("/api/upload", upload.single("pdf"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Завантаж PDF-файл." });
@@ -329,7 +329,7 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
 app.post("/api/tutor", async (req, res) => {
   const { text, task } = req.body || {};
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
-  if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Власник сайту має додати OPENAI_API_KEY у налаштуваннях хостингу." });
+  if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Потрібен GROQ_API_KEY (безкоштовний тариф) або OPENAI_API_KEY у захищених налаштуваннях Render." });
   const prompt = task === "multi-checkpoint"
     ? 'Створи РІВНО 3 різні змістовні тестові запитання українською за прочитаним ПОВНИМ пунктом підручника. Перевіряй розуміння причин, наслідків, фактів та понять лише з наведеного тексту. Не повторюй запитання. Поверни ЛИШЕ валідний JSON без markdown у форматі {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. У масиві questions повинно бути саме три об’єкти; індекс correct — ціле число 0..3. Не включай у відповідь інші поля й не вигадуй фактів.'
     : task === "test"
@@ -338,14 +338,59 @@ app.post("/api/tutor", async (req, res) => {
       ? "Створи ОДНЕ контрольне запитання для паузи під час читання. Поверни ЛИШЕ валідний JSON без markdown у форматі: {\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":0,\"explanation\":\"...\"}. correct — індекс правильної відповіді від 0 до 3. Усе має перевіряти знання саме з цього тексту."
       : "Поясни цей фрагмент підручника простою українською для школяра. Виділи головне та поясни складні слова.";
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4.1-mini", input: `${prompt}\n\nТекст підручника:\n${text.slice(0, 18000)}` })
-    });
-    const data = await response.json();
-    if (!response.ok) return res.status(502).json({ error: data.error?.message || "Помилка під час звернення до ШІ." });
-    const output = (data.output || []).flatMap(x => x.content || []).filter(x => x.type === "output_text").map(x => x.text).join("\n");
+    // For a free-tier AI pilot, use Groq when a server-side key is configured.
+    // API keys must stay in Render environment variables, never browser code.
+    const useGroq = Boolean(process.env.GROQ_API_KEY);
+    const input = prompt + "\n\nТекст підручника:\n" + String(text).slice(0, 15000);
+    let response, output;
+    if (useGroq) {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + process.env.GROQ_API_KEY,
+          "Content-Type": "application/json"
+        },
+        signal: AbortSignal.timeout(30000),
+        body: JSON.stringify({
+          model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+          messages: [
+            { role: "system", content: "Ти ввічливий освітній асистент. Відповідай лише на основі наданого українського навчального тексту. Не додавай вигаданих фактів." },
+            { role: "user", content: input }
+          ],
+          temperature: 0.25,
+          max_completion_tokens: 3072
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn("Groq tutor request failed", response.status);
+        const friendly = response.status === 429
+          ? "Безкоштовний ліміт запитів ШІ тимчасово вичерпаний. Спробуй пізніше."
+          : "ШІ не зміг відповісти. Перевір ключ або доступність моделі.";
+        return res.status(response.status === 429 ? 429 : 502).json({ error: friendly });
+      }
+      output = data.choices?.[0]?.message?.content || "";
+    } else {
+      response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
+          "Content-Type": "application/json"
+        },
+        signal: AbortSignal.timeout(30000),
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+          input
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn("OpenAI tutor request failed", response.status);
+        return res.status(502).json({ error: "Не вдалося отримати відповідь від ШІ." });
+      }
+      output = (data.output || []).flatMap(x => x.content || [])
+        .filter(x => x.type === "output_text").map(x => x.text).join("\n");
+    }
     if (task === "multi-checkpoint" || task === "checkpoint") {
       const cleaned=output.replace(/^\`\`\`(?:json)?\s*/i,"").replace(/\`\`\`\s*$/i,"").trim();
       try{
