@@ -6,10 +6,11 @@ const BOOK_ID="history11-gisem-stand";
 const PDF_URL="/api/printed-book/history11-gisem-stand.pdf";
 const PROGRESS_KEY="urokum:learning-progress:"+BOOK_ID;
 const COMPLETED_KEY="urokum:completed-points:"+BOOK_ID;
+const REVIEWED_KEY="urokum:reviewed-paragraphs:"+BOOK_ID;
 const OLD_PROGRESS_KEY="urokum-page:"+BOOK_ID;
 let lessons=[],pointMap={},pdf=null,lessonIndex=0,pointIndex=0,pageNo=5;
 let generation=0,quizzing=false,answered=false,isSelectionQuiz=false,storedText="";
-let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTextCache=new Map(),completedPoints=new Set(),pdfLoadVersion=0;
+let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTextCache=new Map(),paragraphTextCache=new Map(),completedPoints=new Set(),completedReviews=new Set(),pdfLoadVersion=0;
 const fallbackFirstPoint=[
  {question:"Який період історії України вивчають у цьому підручнику?",options:["Період Київської Русі","Другий період Новітньої історії України","Стародавню історію України","Історію Галицько-Волинської держави"],correct:1,explanation:"Вступ охоплює події з 1945 року до початку XXI століття."},
  {question:"Для чого історики використовують періодизацію?",options:["Щоб поділити історичний розвиток на етапи","Щоб запам’ятати імена всіх правителів","Щоб замінити історичні джерела","Щоб не досліджувати минуле"],correct:0,explanation:"Історичні періоди допомагають упорядкувати політичні, соціальні й культурні зміни."},
@@ -90,7 +91,7 @@ function comparePageRange(page,y,start,end){
  return true;
 }
 function pointKey(){return lessons[lessonIndex]?.id+":"+pointIndex;}
-function saveCompleted(){try{localStorage.setItem(COMPLETED_KEY,JSON.stringify([...completedPoints]))}catch{}}
+function saveCompleted(){try{localStorage.setItem(COMPLETED_KEY,JSON.stringify([...completedPoints]));localStorage.setItem(REVIEWED_KEY,JSON.stringify([...completedReviews]))}catch{}}
 function saveProgress(){
  try{
   const data={lesson:lessons[lessonIndex].id,point:pointIndex,page:pageNo,updatedAt:Date.now()};
@@ -101,6 +102,7 @@ function saveProgress(){
 }
 function restoreProgress(){
  try{const done=JSON.parse(localStorage.getItem(COMPLETED_KEY)||"[]");if(Array.isArray(done))completedPoints=new Set(done.filter(x=>typeof x==="string"))}catch{}
+ try{const done=JSON.parse(localStorage.getItem(REVIEWED_KEY)||"[]");if(Array.isArray(done))completedReviews=new Set(done.filter(x=>typeof x==="string"))}catch{}
  try{
   const v=JSON.parse(localStorage.getItem(PROGRESS_KEY)||"null");
   if(v){
@@ -409,7 +411,18 @@ function showQuizCompletion(alreadyDone=false){
  continueButton.textContent=pointIndex<pointStarts().length-1?"Наступний пункт →":
    lessonIndex<lessons.length-1?"Наступний параграф →":"Завершити книгу ✓";
  continueButton.onclick=()=>next();
- panel.append(symbol,heading,description,continueButton);
+ panel.append(symbol,heading,description);
+ if(pointIndex===pointStarts().length-1){
+  const finalTest=document.createElement("button");
+  finalTest.textContent=completedReviews.has(lessons[lessonIndex].id)
+   ?"Самостійна вже виконана ✓ (повторити)":"Самостійна робота — 6 запитань";
+  finalTest.onclick=()=>startParagraphReview();
+  const retell=document.createElement("button");
+  retell.textContent="✍️ Переказати параграф";
+  retell.onclick=()=>openRetelling();
+  panel.append(finalTest,retell);
+ }
+ panel.append(continueButton);
  area.append(panel);
  const sidebar=document.querySelector(".questions");
  if(sidebar)sidebar.scrollTop=0;
@@ -423,7 +436,7 @@ function afterQuiz(){
  setButtons();
  showQuizCompletion();
 }
-function showQuestions(list,notice="Запитання створені ШІ за прочитаним пунктом"){
+function showQuestions(list,notice="Запитання створені ШІ за прочитаним пунктом",onFinish=afterQuiz){
  let index=0;
  const area=$("questionArea");
  const draw=()=>{
@@ -449,13 +462,103 @@ function showQuestions(list,notice="Запитання створені ШІ з�
    feedback.textContent=(chosen===list[index].correct?"Правильно! ":"Не зовсім. ")+(list[index].explanation||"Перечитай відповідний фрагмент.");
    const next=document.createElement("button");next.className="primary";
    next.textContent=index===list.length-1?"Завершити перевірку":"Наступне запитання →";
-   next.onclick=()=>{index++;if(index<list.length)draw();else afterQuiz()};
+   next.onclick=()=>{index++;if(index<list.length)draw();else onFinish()};
    area.append(next);
   };
   area.append(verify,feedback);
  };
  draw();
 }
+
+async function paragraphText(){
+ const lesson=lessons[lessonIndex],key=lesson.id;
+ if(paragraphTextCache.has(key))return paragraphTextCache.get(key);
+ const start={page:lesson.startPage,y:0},sections=[];
+ for(let n=lesson.startPage;n<=lesson.endPage;n++){
+  const p=await pdf.getPage(n);
+  const content=await p.getTextContent();
+  sections.push(collectPointText(p,content.items,start,null));
+ }
+ const result=sections.join("\n\n").replace(/\s+/g," ").trim().slice(0,14900);
+ paragraphTextCache.set(key,result);
+ return result;
+}
+function showReviewDone(){
+ const area=$("questionArea");area.replaceChildren();
+ const box=document.createElement("div");box.className="q-done";
+ const heading=document.createElement("h3");heading.textContent="Самостійну роботу завершено!";
+ const info=document.createElement("p");info.textContent="Усі шість запитань пройдено. Можеш переказати параграф або продовжити.";
+ const retell=document.createElement("button");retell.textContent="✍️ Переказати параграф";
+ retell.onclick=()=>openRetelling();
+ const forward=document.createElement("button");forward.className="primary";
+ forward.textContent="Наступний параграф →";forward.onclick=()=>next();
+ box.append(heading,info,retell,forward);area.append(box);
+ document.querySelector(".questions").scrollTop=0;
+}
+async function startParagraphReview(){
+ if(!pdf||pointIndex!==pointStarts().length-1||!answered)return;
+ const generationAtStart=generation,area=$("questionArea");
+ area.textContent="ШІ складає самостійну роботу за всім параграфом…";
+ try{
+  const text=await paragraphText();
+  if(generation!==generationAtStart)return;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  let response;
+  try{response=await fetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({task:"paragraph-review",text}),signal:controller.signal});}
+  finally{clearTimeout(timer)}
+  const data=await response.json();
+  if(generation!==generationAtStart)return;
+  if(!response.ok)throw Error(data.error||"Немає відповіді.");
+  if(!Array.isArray(data.questions)||data.questions.length!==6||!data.questions.every(validQuestion))
+    throw Error("ШІ повернув неправильний формат роботи.");
+  showQuestions(data.questions,"Самостійна робота за параграфом",()=>{
+    completedReviews.add(lessons[lessonIndex].id);saveCompleted();
+    showReviewDone();
+  });
+ }catch(error){
+  if(generation!==generationAtStart)return;
+  area.replaceChildren();
+  const note=document.createElement("p");note.className="muted";
+  note.textContent="Не вдалося створити самостійну: "+error.message;
+  const retry=document.createElement("button");retry.textContent="Спробувати ще раз";retry.onclick=startParagraphReview;
+  const back=document.createElement("button");back.textContent="Повернутись";back.onclick=()=>showQuizCompletion(true);
+  area.append(note,retry,back);
+ }
+}
+function openRetelling(){
+ if(!pdf||!answered)return;
+ const area=$("questionArea");area.replaceChildren();
+ const heading=document.createElement("h3");heading.textContent="Переказ параграфа";
+ const hint=document.createElement("p");hint.className="muted";
+ hint.textContent="Напиши своїми словами основні події, причини та наслідки. ШІ підкаже, що вдалося і що варто уточнити.";
+ const input=document.createElement("textarea");input.rows=7;input.maxLength=2500;input.style.width="100%";
+ input.style.padding="10px";input.style.borderRadius="10px";input.placeholder="Мій переказ…";
+ const assess=document.createElement("button");assess.className="primary";assess.textContent="Перевірити переказ";
+ const result=document.createElement("div");result.style.whiteSpace="pre-wrap";result.style.lineHeight="1.6";result.style.fontSize="14px";
+ const back=document.createElement("button");back.textContent="Повернутися до пункту";
+ back.onclick=()=>showQuizCompletion(true);
+ assess.onclick=async()=>{
+  const retelling=input.value.trim();
+  if(retelling.length<30){result.textContent="Напиши хоча б кілька речень.";return}
+  const version=generation;assess.disabled=true;result.textContent="ШІ читає твій переказ…";
+  try{
+   const text=await paragraphText();if(version!==generation)return;
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+   let response;
+   try{response=await fetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({task:"assess-retelling",retelling,text}),signal:controller.signal})}
+   finally{clearTimeout(timer)}
+   const data=await response.json();if(version!==generation)return;
+   if(!response.ok)throw Error(data.error||"Невідома помилка");
+   result.textContent=data.answer||"Відгук поки недоступний.";
+  }catch(error){if(version===generation)result.textContent="Не вдалося перевірити переказ: "+error.message}
+  finally{assess.disabled=false}
+ };
+ area.append(heading,hint,input,assess,result,back);
+ document.querySelector(".questions").scrollTop=0;
+}
+
 function showReflections(reason){
  const questions=[
   "Яка головна думка цього пункту?",
