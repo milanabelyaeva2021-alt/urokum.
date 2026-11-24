@@ -26,6 +26,19 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 #exitFull{display:none}.full #exitFull{display:inline-block}
 @media(max-width:1050px){.shell{grid-template-columns:205px minmax(0,1fr)}.questions{grid-column:2;position:static;max-height:none}.sidebar{grid-row:1/3}}
 @media(max-width:700px){.shell{display:flex;flex-direction:column;padding:8px}.sidebar{position:static;max-height:220px}.questions{position:static;max-height:none}.paperPanel{padding:8px}#paper{padding:5px;min-height:200px}.top{padding:10px}.top span{display:none}.full .shell{display:flex;flex-direction:column}.full .questions{position:static}}
+
+[hidden]{display:none!important}
+#pageSurface{position:relative;flex:0 0 auto;box-shadow:0 4px 18px #28203c30;background:white}
+#pageSurface canvas{display:block;max-width:none;box-shadow:none}
+#pdfText{position:absolute;inset:0;overflow:hidden;opacity:1;line-height:1;text-align:initial;text-size-adjust:none;forced-color-adjust:none;user-select:text;z-index:2}
+#pdfText span,#pdfText br{position:absolute;white-space:pre;color:transparent;cursor:text;transform-origin:0 0;user-select:text}
+#pdfText ::selection{background:rgba(126,85,215,.46)}
+#pdfText span.read-focus{background:rgba(255,213,76,.34);border-radius:2px}
+.read-tools{display:flex;align-items:center;flex-wrap:wrap;gap:9px;width:100%}
+.read-tools label{background:#f6f1fa;padding:9px 12px;border-radius:9px;border:1px solid #e7dbef;font-size:13px}
+.read-tools input{max-width:190px;font-size:13px}
+#activeExcerpt{font-size:13px;color:#68518f;line-height:1.5}
+#guideNote{background:#f6f0ff;color:#5e408d;padding:12px;border-radius:11px;line-height:1.5;width:100%}
 </style>
 </head>
 <body>
@@ -35,7 +48,9 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 <aside class="sidebar"><h2>Зміст підручника</h2><div id="toc"></div></aside>
 <main class="paperPanel">
  <div class="paperToolbar"><div class="pageLabel"><strong id="lessonName"></strong><span id="pageInfo"></span></div><button id="exitFull" onclick="toggleFull(false)">← До змісту</button></div>
- <div id="paper"><div id="paperStatus">Готую сторінку…</div><canvas id="pageCanvas" hidden aria-label="Оригінальна сторінка підручника"></canvas></div>
+ <div class="read-tools"><label>📖 Відкрити свій PDF <input id="localPdf" type="file" accept=".pdf,application/pdf"></label><button id="askSelected" disabled>🧠 Питання за виділеним</button></div>
+<div id="paper"><div id="paperStatus">Готую сторінку…</div><div id="pageSurface" hidden><canvas id="pageCanvas" aria-label="Оригінальна сторінка підручника"></canvas><div id="pdfText"></div></div></div>
+<div id="activeExcerpt"></div><div id="guideNote">Читай виділений жовтим уривок. Після читання натисни кнопку запитання.</div>
  <div class="controls"><button id="prevPage">← Попередня</button><button id="askQuestion" class="primary" disabled>🧠 Запитання після читання</button><button id="nextPage" disabled>Наступна сторінка →</button></div>
  <div class="status muted">Сторінки відтворюються в оригінальному оформленні: текст, таблиці, карти й ілюстрації.</div>
 </main>
@@ -53,11 +68,78 @@ const $=id=>document.getElementById(id);
 const id=new URLSearchParams(location.search).get("id")||"history11-gisem-stand";
 const sourceURL="/api/printed-book/history11-gisem-stand.pdf";
 let book=null,doc=null,lessons=[],selected=null,pageNumber=5,seq=0,answerGiven=false,questionsCache=new Map(),readScrollHandler=null;
+let highlightedText="",markedText="",pdfVersion=0;
 const starterQuestions={
  5:{question:"Який період історії України розглядається в цьому підручнику?",options:["Лише Давня історія","Другий період Новітньої історії","Лише середньовіччя","Україна XVI століття"],correct:1,explanation:"Вступ пояснює, що курс присвячено подіям від 1945 року до початку XXI століття."},
  6:{question:"Яка міжнародна організація прийняла УРСР до складу держав-засновниць?",options:["Європейський Союз","НАТО","Організація Об’єднаних Націй","Рада Європи"],correct:2,explanation:"Українська РСР увійшла до складу ООН після Другої світової війни."},
  7:{question:"Яка подія стала вирішальною для відновлення незалежності України?",options:["Проголошення незалежності 24 серпня 1991 року","Утворення ООН","Початок десталінізації","Завершення Другої світової війни"],correct:0,explanation:"24 серпня 1991 року Україна проголосила незалежність."}
 };
+
+function selectionOfPage(){
+ const selection=window.getSelection();
+ if(!selection||selection.isCollapsed||!selection.rangeCount)return "";
+ const root=$("pdfText");
+ if(!root.contains(selection.anchorNode)||!root.contains(selection.focusNode))return "";
+ return selection.toString().replace(/\s+/g," ").trim().slice(0,2500);
+}
+document.addEventListener("selectionchange",()=>{
+ markedText=selectionOfPage();
+ $("askSelected").disabled=!markedText;
+ $("activeExcerpt").textContent=markedText?"Виділено: «"+markedText.slice(0,175)+(markedText.length>175?"…":"")+"»":"";
+});
+$("askSelected").onclick=()=>{
+ const text=selectionOfPage()||markedText;
+ if(text){$("askSelected").disabled=true;makeQuestion(seq,text)}
+};
+function bookDatabase(){
+ return new Promise((resolve,reject)=>{
+  if(!window.indexedDB)return reject(Error("IndexedDB недоступна"));
+  const request=indexedDB.open("urokum-saved-pdfs",1);
+  request.onupgradeneeded=()=>request.result.createObjectStore("books");
+  request.onsuccess=()=>resolve(request.result);
+  request.onerror=()=>reject(request.error);
+ });
+}
+async function getCachedPdf(){
+ try{
+  const db=await bookDatabase();
+  const data=await new Promise((resolve,reject)=>{
+   const req=db.transaction("books","readonly").objectStore("books").get("hisem11");
+   req.onsuccess=()=>resolve(req.result||null);
+   req.onerror=()=>reject(req.error);
+  });db.close();return data;
+ }catch{return null}
+}
+async function cachePdf(bytes){
+ try{
+  const db=await bookDatabase();
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction("books","readwrite");
+   tx.objectStore("books").put(bytes,"hisem11");
+   tx.oncomplete=resolve;
+   tx.onerror=()=>reject(tx.error);
+  });db.close();
+ }catch(error){console.warn("Local PDF cache failed",error)}
+}
+async function openLocalPdf(file){
+ const version=++pdfVersion;
+ const bytes=new Uint8Array(await file.arrayBuffer());
+ const pdf=await pdfjs.getDocument({data:bytes.slice()}).promise;
+ if(pdf.numPages!==288){await pdf.destroy();throw Error("Потрібен підручник на 288 сторінок.");}
+ if(version!==pdfVersion){await pdf.destroy();return}
+ if(doc)await doc.destroy().catch(()=>{});
+ doc=pdf;cachePdf(bytes.buffer);
+ $("message").hidden=true;$("app").hidden=false;
+ await showPage();
+}
+$("localPdf").addEventListener("change",async()=>{
+ const file=$("localPdf").files?.[0];
+ if(!file)return;
+ $("paperStatus").hidden=false;
+ $("paperStatus").textContent="Відкриваю твою книгу…";
+ try{await openLocalPdf(file)}catch(error){$("paperStatus").textContent="Помилка: "+error.message}
+});
+
 function flatten(items){for(const item of items||[]){if(item.type==="paragraph")lessons.push(item);if(item.children)flatten(item.children)}}
 function renderTOC(items){const wrap=$("toc");for(const item of items||[]){
  if(item.type==="chapter"){const d=document.createElement("div");d.className="chapter";d.textContent=item.title;const small=document.createElement("small");small.textContent="Стор. "+item.startPage+"–"+item.endPage;d.append(small);wrap.append(d)}
@@ -69,52 +151,74 @@ function selectLesson(lesson,requestedPage){selected=lesson;pageNumber=Math.max(
 function getLessonByPage(n){return lessons.find(x=>n>=x.startPage&&n<=x.endPage)}
 async function showPage(){
  const token=++seq,lesson=selected;
- if(readScrollHandler){window.removeEventListener("scroll",readScrollHandler);readScrollHandler=null;}
- answerGiven=false;$("askQuestion").disabled=true;$("askQuestion").textContent="🧠 Запитання після читання";
- $("nextPage").disabled=true;$("pageCanvas").hidden=true;$("paperStatus").hidden=false;$("paperStatus").textContent="Відкриваю сторінку "+pageNumber+"…";
- $("questionArea").replaceChildren();$("questionIntro").textContent="Спочатку прочитай цю сторінку. Потім натисни кнопку під нею — ШІ запитає тебе про прочитане.";
- $("lessonName").textContent=lesson.title;$("pageInfo").textContent="Стор. "+pageNumber+" · параграф: "+lesson.startPage+"–"+lesson.endPage;
- for(const b of document.querySelectorAll(".para"))b.classList.toggle("active",b.dataset.id===lesson.id);
+ if(readScrollHandler){window.removeEventListener("scroll",readScrollHandler);readScrollHandler=null}
+ answerGiven=false;
+ $("nextPage").disabled=true;$("askQuestion").disabled=true;
+ $("pageSurface").hidden=true;$("paperStatus").hidden=false;
+ $("paperStatus").textContent="Відкриваю сторінку "+pageNumber+"…";
+ $("questionArea").replaceChildren();
+ $("questionIntro").textContent="Прочитай жовтий уривок, а тоді натисни кнопку перевірки.";
+ $("lessonName").textContent=lesson.title;
+ $("pageInfo").textContent="Стор. "+pageNumber+" · параграф: "+lesson.startPage+"–"+lesson.endPage;
+ for(const button of document.querySelectorAll(".para"))button.classList.toggle("active",button.dataset.id===lesson.id);
  $("prevPage").disabled=pageNumber===lesson.startPage&&lessons.indexOf(lesson)===0;
  $("nextPage").textContent=pageNumber===lesson.endPage?"Наступний параграф →":"Наступна сторінка →";
  persist();
  try{
-  const page=await doc.getPage(pageNumber);if(token!==seq)return;
-  const viewport=page.getViewport({scale:1});
-  const available=Math.min(880,Math.max(300,$("paper").clientWidth-30));
-  const displayScale=available/viewport.width;
-  const pixelRatio=Math.min(2,window.devicePixelRatio||1);
-  const renderViewport=page.getViewport({scale:displayScale*pixelRatio});
-  const canvas=$("pageCanvas"),ctx=canvas.getContext("2d",{alpha:false});
-  canvas.width=Math.ceil(renderViewport.width);canvas.height=Math.ceil(renderViewport.height);
-  canvas.style.width=Math.round(viewport.width*displayScale)+"px";
-  canvas.style.height=Math.round(viewport.height*displayScale)+"px";
-  await page.render({canvasContext:ctx,viewport:renderViewport}).promise;
+  const page=await doc.getPage(pageNumber);
   if(token!==seq)return;
-  $("paperStatus").hidden=true;canvas.hidden=false;
-  const textInfo=await page.getTextContent();
+  const base=page.getViewport({scale:1});
+  const scale=Math.min(880,Math.max(280,$("paper").clientWidth-30))/base.width;
+  const screen=page.getViewport({scale});
+  const bitmap=page.getViewport({scale:scale*Math.min(2,window.devicePixelRatio||1)});
+  const canvas=$("pageCanvas"),ctx=canvas.getContext("2d",{alpha:false}),root=$("pageSurface"),layer=$("pdfText");
+  canvas.width=Math.ceil(bitmap.width);canvas.height=Math.ceil(bitmap.height);
+  canvas.style.width=Math.ceil(screen.width)+"px";canvas.style.height=Math.ceil(screen.height)+"px";
+  root.style.width=Math.ceil(screen.width)+"px";root.style.height=Math.ceil(screen.height)+"px";
+  layer.style.width=Math.ceil(screen.width)+"px";layer.style.height=Math.ceil(screen.height)+"px";
+  layer.style.setProperty("--scale-factor",String(scale));
+  layer.style.setProperty("--total-scale-factor",String(scale));
+  layer.replaceChildren();
+  await page.render({canvasContext:ctx,viewport:bitmap}).promise;
   if(token!==seq)return;
-  const pageText=textInfo.items.filter(x=>typeof x.str==="string").map(x=>x.str).join(" ").slice(0,12000);
+  $("paperStatus").hidden=true;root.hidden=false;
+  const content=await page.getTextContent();
+  if(token!==seq)return;
+  const wholeText=content.items.map(x=>x.str||"").join(" ").slice(0,14000);
+  try{
+   const textLayer=new pdfjs.TextLayer({textContentSource:content,container:layer,viewport:screen});
+   await textLayer.render();
+  }catch(error){console.warn("Selectable layer failed",error)}
+  if(token!==seq)return;
+  const spans=[...layer.querySelectorAll("span")].filter(x=>x.textContent.trim().length>1);
+  layer.querySelectorAll(".read-focus").forEach(x=>x.classList.remove("read-focus"));
+  let total=0,marked=[];
+  for(const span of spans){
+    if(total>=1100)break;
+    marked.push(span);total+=span.textContent.length;
+    span.classList.add("read-focus");
+  }
+  highlightedText=marked.length?marked.map(x=>x.textContent).join(" "):wholeText;
+  $("guideNote").textContent="Жовтим підсвічено початковий уривок сторінки "+pageNumber+". Можна виділити будь-який інший текст мишкою та попросити запитання.";
   $("askQuestion").disabled=false;
+  $("askQuestion").textContent="🧠 Прочитано — запитання";
   $("askQuestion").onclick=()=>{
     if(token!==seq||answerGiven)return;
     $("askQuestion").disabled=true;
-    $("askQuestion").textContent="ШІ готує запитання…";
-    makeQuestion(token,pageText);
+    makeQuestion(token,highlightedText);
   };
-  // The checkpoint appears after reading, never over the printed text.
-  // Scrolling to the end of the page can trigger it automatically.
-  const checkReadPosition=()=>{
-    if(token!==seq||$("askQuestion").disabled||answerGiven)return;
-    const rect=$("pageCanvas").getBoundingClientRect();
-    if(rect.height>500&&rect.bottom<=window.innerHeight+90){
-      $("askQuestion").click();
-      window.removeEventListener("scroll",checkReadPosition);
-    }
+  const displayAt=Date.now();
+  readScrollHandler=()=>{
+    if(token!==seq||$("askQuestion").disabled||Date.now()-displayAt<6000||selectionOfPage())return;
+    const rect=root.getBoundingClientRect();
+    if(rect.bottom<=innerHeight+75)$("askQuestion").click();
   };
-  readScrollHandler=checkReadPosition;
   window.addEventListener("scroll",readScrollHandler,{passive:true});
- }catch(e){if(token!==seq)return; $("paperStatus").textContent="Не вдалося відкрити сторінку. Джерело може бути тимчасово недоступним.";fallbackQuestion(token,"Не вдалося сформувати запитання.");console.error(e)}
+ }catch(error){
+  if(token!==seq)return;
+  console.error(error);
+  $("paperStatus").hidden=false;$("paperStatus").textContent="Не вдалося відкрити сторінку. Вибери PDF у полі вище.";
+ }
 }
 function makeChoices(token,quiz,label){
  if(token!==seq)return;
@@ -176,42 +280,36 @@ document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement
 async function start(){
  try{
   if(id!=="history11-gisem-stand")throw Error("Невідоме видання");
-  const resp=await fetch("/books/h11/outline.json",{cache:"no-store"});if(!resp.ok)throw Error("Не знайдено зміст.");
-  book=await resp.json();flatten(book.contents);renderTOC(book.contents);if(lessons.length!==29)throw Error("Невірна структура книги.");
-  const task=pdfjs.getDocument({url:sourceURL,rangeChunkSize:131072});
-  doc=await task.promise;
-  if(doc.numPages<270)throw Error("Оригінал книги містить недостатньо сторінок.");
-  let restored=null;try{restored=JSON.parse(localStorage.getItem("urokum-page:"+id)||"null")}catch{}
-  selected=lessons.find(x=>x.id===restored?.id)||lessons[0];
-  pageNumber=restored?.page>=selected.startPage&&restored?.page<=selected.endPage?restored.page:selected.startPage;
-  $("message").hidden=true;$("app").hidden=false;showPage();
- }catch(err){
-  console.error("Book loading failed",err);
-  $("message").replaceChildren();
-  const h=document.createElement("h2");
-  h.textContent="Не вдалося отримати сторінки з видавництва";
-  const p=document.createElement("p");
-  p.textContent="Спробуй повторити завантаження. Якщо джерело недоступне, можеш відкрити свій PDF тут — він не надсилатиметься на сайт і відображатиметься як сторінки книжки.";
-  $("message").append(h,p);
-  const retry=document.createElement("button");retry.className="primary";retry.textContent="Спробувати ще раз";
-  retry.onclick=()=>location.reload();$("message").append(retry);
-  const line=document.createElement("p");line.textContent="Або обери PDF цієї книги зі свого комп’ютера:";$("message").append(line);
-  const fileInput=document.createElement("input");fileInput.type="file";fileInput.accept="application/pdf";fileInput.setAttribute("aria-label","Вибрати PDF для читання без завантаження на сайт");
-  $("message").append(fileInput);
-  const errorMessage=document.createElement("p");errorMessage.className="error";$("message").append(errorMessage);
-  fileInput.addEventListener("change",async ()=>{
-    const file=fileInput.files?.[0];if(!file)return;
-    fileInput.disabled=true;errorMessage.textContent="Відкриваю сторінки…";
-    try{
-      const bytes=new Uint8Array(await file.arrayBuffer());
-      doc=await pdfjs.getDocument({data:bytes}).promise;
-      if(doc.numPages<274)throw new Error("Це інший PDF: потрібен підручник Гісема й Мартинюка на 288 сторінок.");
-      if(!lessons.length)throw new Error("Не знайдено зміст книги на сайті.");
-      selected=lessons[0];pageNumber=selected.startPage;
-      $("message").hidden=true;$("app").hidden=false;showPage();
-    }catch(problem){errorMessage.textContent=problem.message||"Не вдалося прочитати файл.";fileInput.disabled=false}
-  });
- }
+  const response=await fetch("/books/h11/outline.json",{cache:"no-store"});
+  if(!response.ok)throw Error("Не знайдено зміст");
+  book=await response.json();
+  flatten(book.contents);renderTOC(book.contents);
+  if(lessons.length!==29)throw Error("Помилка змісту");
+  let saved=null;try{saved=JSON.parse(localStorage.getItem("urokum-page:"+id)||"null")}catch{}
+  selected=lessons.find(x=>x.id===saved?.id)||lessons[0];
+  pageNumber=saved?.page>=selected.startPage&&saved?.page<=selected.endPage?saved.page:selected.startPage;
+  $("message").hidden=true;$("app").hidden=false;
+  $("lessonName").textContent=selected.title;
+  $("pageInfo").textContent="Стор. "+pageNumber;
+  $("paperStatus").textContent="Зміст відкрито. Завантажую сторінки…";
+  const cached=await getCachedPdf();
+  if(cached){
+   try{
+    const loaded=await pdfjs.getDocument({data:new Uint8Array(cached)}).promise;
+    if(loaded.numPages===288){doc=loaded;await showPage();return}
+   }catch(error){console.warn("Local cached PDF unavailable",error)}
+  }
+  const version=pdfVersion;
+  try{
+   const loaded=await pdfjs.getDocument({url:sourceURL,rangeChunkSize:262144}).promise;
+   if(version!==pdfVersion){await loaded.destroy();return}
+   if(loaded.numPages!==288)throw Error("Невірне видання підручника");
+   doc=loaded;await showPage();
+  }catch(error){
+   console.warn("Remote PDF unavailable",error);
+   if(!doc)$("paperStatus").textContent="Зміст відкрився, але сервер не зміг отримати сторінки. Натисни «Відкрити свій PDF» вище. Книга збережеться у твоєму браузері, тому вдруге завантажувати її не потрібно.";
+  }
+ }catch(error){$("message").textContent="Помилка читалки: "+error.message}
 }
 start();
 </script>
