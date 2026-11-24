@@ -5,10 +5,11 @@ const $=id=>document.getElementById(id);
 const BOOK_ID="history11-gisem-stand";
 const PDF_URL="/api/printed-book/history11-gisem-stand.pdf";
 const PROGRESS_KEY="urokum:learning-progress:"+BOOK_ID;
+const COMPLETED_KEY="urokum:completed-points:"+BOOK_ID;
 const OLD_PROGRESS_KEY="urokum-page:"+BOOK_ID;
 let lessons=[],pointMap={},pdf=null,lessonIndex=0,pointIndex=0,pageNo=5;
 let generation=0,quizzing=false,answered=false,isSelectionQuiz=false,storedText="";
-let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTextCache=new Map();
+let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTextCache=new Map(),completedPoints=new Set();
 const fallbackFirstPoint=[
  {question:"Який період історії України вивчають у цьому підручнику?",options:["Період Київської Русі","Другий період Новітньої історії України","Стародавню історію України","Історію Галицько-Волинської держави"],correct:1,explanation:"Вступ охоплює події з 1945 року до початку XXI століття."},
  {question:"Для чого історики використовують періодизацію?",options:["Щоб поділити історичний розвиток на етапи","Щоб запам’ятати імена всіх правителів","Щоб замінити історичні джерела","Щоб не досліджувати минуле"],correct:0,explanation:"Історичні періоди допомагають упорядкувати політичні, соціальні й культурні зміни."},
@@ -87,6 +88,8 @@ function comparePageRange(page,y,start,end){
  if(end&&page===end.page&&y>=end.y-5)return false;
  return true;
 }
+function pointKey(){return lessons[lessonIndex]?.id+":"+pointIndex;}
+function saveCompleted(){try{localStorage.setItem(COMPLETED_KEY,JSON.stringify([...completedPoints]))}catch{}}
 function saveProgress(){
  try{
   const data={lesson:lessons[lessonIndex].id,point:pointIndex,page:pageNo,updatedAt:Date.now()};
@@ -96,6 +99,7 @@ function saveProgress(){
  }catch{}
 }
 function restoreProgress(){
+ try{const done=JSON.parse(localStorage.getItem(COMPLETED_KEY)||"[]");if(Array.isArray(done))completedPoints=new Set(done.filter(x=>typeof x==="string"))}catch{}
  try{
   const v=JSON.parse(localStorage.getItem(PROGRESS_KEY)||"null");
   if(v){
@@ -194,6 +198,7 @@ function highlightPoint(){
 }
 function setButtons(){
  const last=atPointEnd();
+ if(last&&completedPoints.has(pointKey()))answered=true;
  $("askQuestion").disabled=!pdf||!last||answered;
  $("nextPage").disabled=!pdf||(last&&!answered);
  $("askQuestion").textContent=answered?"✓ Пункт перевірено":"🧠 Пункт прочитано — 3 запитання";
@@ -208,7 +213,7 @@ function setButtons(){
 async function renderPage(){
  if(!pdf||!lessons.length)return;
  const token=++generation,lesson=lessons[lessonIndex];
- answered=false;quizzing=false;
+ answered=completedPoints.has(pointKey())&&atPointEnd();quizzing=false;
  $("questionArea").replaceChildren();
  $("pageSurface").hidden=true;$("paperStatus").hidden=false;
  $("paperStatus").textContent="Відкриваю сторінку "+pageNo+"…";
@@ -314,8 +319,8 @@ function afterQuiz(){
   $("questionArea").replaceChildren();
   setButtons();
  }else{
-  answered=true;setButtons();
-  $("guideNote").textContent="Усі 3 запитання завершено. Тепер можеш перейти до наступного пункту.";
+  answered=true;completedPoints.add(pointKey());saveCompleted();saveProgress();setButtons();
+  $("guideNote").textContent="Усі 3 запитання завершено. Результат збережено — можна перейти до наступного пункту.";
  }
 }
 function showQuestions(list,notice="Запитання створені ШІ за прочитаним пунктом"){
