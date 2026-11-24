@@ -9,7 +9,7 @@ const COMPLETED_KEY="urokum:completed-points:"+BOOK_ID;
 const OLD_PROGRESS_KEY="urokum-page:"+BOOK_ID;
 let lessons=[],pointMap={},pdf=null,lessonIndex=0,pointIndex=0,pageNo=5;
 let generation=0,quizzing=false,answered=false,isSelectionQuiz=false,storedText="";
-let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTextCache=new Map(),completedPoints=new Set();
+let readingTask=null,questionCache=new Map(),currentItems=[],pageScale=1,fullTextCache=new Map(),completedPoints=new Set(),pdfLoadVersion=0;
 const fallbackFirstPoint=[
  {question:"Який період історії України вивчають у цьому підручнику?",options:["Період Київської Русі","Другий період Новітньої історії України","Стародавню історію України","Історію Галицько-Волинської держави"],correct:1,explanation:"Вступ охоплює події з 1945 року до початку XXI століття."},
  {question:"Для чого історики використовують періодизацію?",options:["Щоб поділити історичний розвиток на етапи","Щоб запам’ятати імена всіх правителів","Щоб замінити історичні джерела","Щоб не досліджувати минуле"],correct:0,explanation:"Історичні періоди допомагають упорядкувати політичні, соціальні й культурні зміни."},
@@ -147,9 +147,11 @@ async function putCached(buffer){
  }catch(e){console.warn("Cannot cache PDF in browser",e)}
 }
 async function loadBytes(data,store){
+ const version=++pdfLoadVersion;
  const bytes=data instanceof Uint8Array?data:new Uint8Array(data);
  const doc=await pdfjs.getDocument({data:bytes.slice()}).promise;
  if(doc.numPages!==288){await doc.destroy();throw Error("Потрібна книга Гісема на 288 сторінок.");}
+ if(version!==pdfLoadVersion){await doc.destroy();return}
  if(pdf)await pdf.destroy().catch(()=>{});
  pdf=doc;if(store)await putCached(bytes.buffer);
  $("message").hidden=true;$("app").hidden=false;
@@ -417,11 +419,14 @@ async function main(){
    catch(error){console.warn("Stored PDF cannot be opened",error)}
   }
   try{
+   const version=pdfLoadVersion;
    const doc=await pdfjs.getDocument({url:PDF_URL,rangeChunkSize:262144}).promise;
+   if(version!==pdfLoadVersion){await doc.destroy();return}
    if(doc.numPages!==288){await doc.destroy();throw Error("Знайдено іншу книгу");}
    pdf=doc;await renderPage();
   }catch(error){
    console.warn("Publisher PDF unavailable",error);
+   if(pdf)return;
    $("paperStatus").hidden=false;
    $("paperStatus").textContent="Зміст збережено. Але зовнішнє джерело книги зараз недоступне. Натисни «Відкрити свій PDF» вище: це потрібно один раз у цьому браузері.";
    $("guideNote").textContent="Вибір класу, параграфа й пункту збережено. Після вибору PDF можна продовжити з тієї самої сторінки.";
