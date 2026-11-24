@@ -66,7 +66,7 @@ function renderContents(items){
     const sm=document.createElement("small");sm.textContent="Стор. "+item.startPage+"–"+item.endPage;
     button.append(sm);button.onclick=()=>{
       const i=lessons.findIndex(lesson=>lesson.id===item.id);
-      if(i<0)return;lessonIndex=i;pointIndex=0;pageNo=pointStarts()[0]?.page||item.startPage;
+      if(i<0)return;lessonIndex=i;pointIndex=0;pageNo=item.startPage;
       saveProgress();renderPage();
     };
     root.append(button);
@@ -106,7 +106,7 @@ function restoreProgress(){
    const i=lessons.findIndex(x=>x.id===v.lesson);
    if(i>=0){
     lessonIndex=i;pointIndex=Math.max(0,Math.min(pointStarts().length-1,Number(v.point)||0));
-    const start=pointStart();pageNo=Math.max(start.page,Math.min(pointLastPage(),Number(v.page)||start.page));
+    const start=pointStart();pageNo=Math.max(lessons[lessonIndex].startPage,Math.min(pointLastPage(),Number(v.page)||start.page));
     return;
    }
   }
@@ -115,7 +115,7 @@ function restoreProgress(){
    const i=lessons.findIndex(x=>x.id===old.id);
    if(i>=0){lessonIndex=i;const p=Number(old.page)||lessons[i].startPage;
     const points=pointStarts();pointIndex=points.reduce((idx,start,j)=>start.page<=p?j:idx,0);
-    pageNo=Math.max(pointStart().page,Math.min(pointLastPage(),p));}
+    pageNo=Math.max(lessons[lessonIndex].startPage,Math.min(pointLastPage(),p));}
   }
  }catch(error){console.warn("Cannot restore reading progress",error)}
 }
@@ -222,7 +222,7 @@ async function renderPage(){
  $("lessonName").textContent=lesson.title;
  $("pageInfo").textContent="Стор. "+pageNo+" · пункт "+pointStart().number+" · § "+(lessonIndex+1);
  for(const b of document.querySelectorAll(".para"))b.classList.toggle("active",b.dataset.id===lesson.id);
- $("prevPage").disabled=lessonIndex===0&&pointIndex===0&&pageNo===pointStart().page;
+ $("prevPage").disabled=lessonIndex===0&&pointIndex===0&&pageNo===lessons[lessonIndex].startPage;
  $("askSelected").disabled=true;$("activeExcerpt").textContent="";
  $("nextPage").disabled=true;$("askQuestion").disabled=true;
  saveProgress();
@@ -390,7 +390,7 @@ function next(){
 }
 function previous(){
  if(!pdf)return;
- const start=pointStart().page;
+ const start=pointIndex===0?lessons[lessonIndex].startPage:pointStart().page;
  if(pageNo>start){pageNo--;renderPage();return}
  if(pointIndex>0){pointIndex--;pageNo=pointLastPage()}
  else if(lessonIndex>0){lessonIndex--;pointIndex=pointStarts().length-1;pageNo=pointLastPage()}
