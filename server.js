@@ -327,11 +327,16 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
 });
 
 app.post("/api/tutor", async (req, res) => {
-  const { text, task, question } = req.body || {};
+  const { text, task, question, retelling } = req.body || {};
   if (task === "ask-question" && (typeof question !== "string" || question.trim().length < 3 || question.length > 500)) return res.status(400).json({error:"Напиши коротке запитання до прочитаного пункту."});
+  if (task === "assess-retelling" && (typeof retelling !== "string" || retelling.trim().length < 30 || retelling.length > 2500)) return res.status(400).json({error:"Напиши переказ хоча б у кількох реченнях (до 2500 символів)."});
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
   if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Потрібен GROQ_API_KEY (безкоштовний тариф) або OPENAI_API_KEY у захищених налаштуваннях Render." });
-  const prompt = task === "ask-question"
+  const prompt = task === "paragraph-review"
+    ? 'Зроби підсумкову САМОСТІЙНУ РОБОТУ з рівно 6 різних тестових запитань українською за всім параграфом. Два на факти, два на розуміння причин і наслідків, два на узагальнення. Тільки відомості з тексту. Поверни виключно JSON {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. Обов’язково 6 запитань, 4 відповіді у кожному, індекс correct 0..3.'
+    : task === "assess-retelling"
+    ? "Ти доброзичливий учитель. Оціни переказ параграфа за наданим текстом. Спочатку відзнач 2 конкретні сильні сторони, потім 2 важливі пропущені чи переплутані факти (якщо є), а вкінці запропонуй один крок, як покращити переказ. Без вигаданих фактів і без оцінки балами. Переказ учня: " + retelling.trim().slice(0,2500)
+    : task === "ask-question"
     ? "Ти уважний учитель історії. Відповідай українською зрозуміло і по суті, спираючись на текст цього пункту. Пояснюй незнайомі поняття й причинно-наслідкові зв’язки. Якщо в пункті немає достатньо відомостей, чесно зазнач це, а не вигадуй. Запитання учня: " + question.trim().slice(0,500)
     : task === "multi-checkpoint"
     ? 'Створи РІВНО 4 різні змістовні тестові запитання українською за прочитаним ПОВНИМ пунктом підручника. Перевіряй розуміння причин, наслідків, фактів та понять лише з наведеного тексту. Не повторюй запитання. Поверни ЛИШЕ валідний JSON без markdown у форматі {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. У масиві questions повинно бути саме чотири об’єкти; індекс correct — ціле число 0..3. Не включай у відповідь інші поля й не вигадуй фактів.'
@@ -394,20 +399,20 @@ app.post("/api/tutor", async (req, res) => {
       output = (data.output || []).flatMap(x => x.content || [])
         .filter(x => x.type === "output_text").map(x => x.text).join("\n");
     }
-    if (task === "multi-checkpoint" || task === "checkpoint") {
+    if (task === "multi-checkpoint" || task === "checkpoint" || task === "paragraph-review") {
       const cleaned=output.replace(/^\`\`\`(?:json)?\s*/i,"").replace(/\`\`\`\s*$/i,"").trim();
       try{
         const parsed=JSON.parse(cleaned);
         if(task==="checkpoint")return res.json({quiz:parsed});
         const qs=parsed.questions;
-        if(!Array.isArray(qs)||qs.length!==4||qs.some(q=>
+        if(!Array.isArray(qs)||qs.length!==(task==="paragraph-review"?6:4)||qs.some(q=>
           typeof q.question!=="string"||!Array.isArray(q.options)||q.options.length!==4||
           q.options.some(x=>typeof x!=="string")||!Number.isInteger(q.correct)||q.correct<0||q.correct>3))
           throw Error("Wrong quiz structure");
         return res.json({questions:qs});
       }catch(error){
         console.warn("AI quiz JSON invalid",error.message);
-        return res.status(502).json({error:"ШІ не повернув чотири коректні запитання. Спробуй ще раз."});
+        return res.status(502).json({error:"ШІ не повернув потрібну кількість коректних запитань. Спробуй ще раз."});
       }
     }
     res.json({ answer: output || "Не вдалося отримати відповідь." });
