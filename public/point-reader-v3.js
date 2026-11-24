@@ -18,7 +18,7 @@ const fallbackFirstPoint=[
 const style=document.createElement("style");
 style.textContent=
  '#pdfText span,#pdfText br{user-select:text;color:transparent;cursor:text}' +
- '#pdfText span.read-focus{background:rgba(255,209,77,.34)!important;outline:1px solid #e2b94640}' +
+ '#pdfText span.read-focus{background:rgba(255,196,35,.72)!important;mix-blend-mode:multiply;box-shadow:0 0 0 1px rgba(232,161,0,.36)}' +
  '#pdfText ::selection{background:rgba(110,71,207,.55)}' +
  '.q-option{display:block;width:100%;text-align:left;padding:12px;margin:9px 0;line-height:1.4}' +
  '.q-option.selected{border-color:#764da8;background:#eee5fa}' +
@@ -198,19 +198,6 @@ function hidePublisherQR(ctx,base,bitmap,page){
  for(const y of tops)ctx.fillRect((388.373-0.9)*sx,(y-0.9)*sy,(56.64+1.8)*sx,(56.64+1.8)*sy);
  ctx.restore();
 }
-async function checkAiAvailability(){
- const label=$("aiStatus");
- if(!label)return;
- try{
-  const response=await fetch("/api/ai-status",{cache:"no-store"});
-  if(!response.ok)throw Error("Сервер не відповів");
-  const data=await response.json();
-  label.textContent=data.configured
-    ?"Ключ ШІ на сервері налаштований. Генерацію запитань перевіримо під час читання."
-    :"ШІ ще не налаштований на Render. Поки працюють підготовлені запитання та самоперевірка.";
- }catch(error){label.textContent="Поки не вдалося перевірити підключення ШІ на сервері."}
-}
-checkAiAvailability();
 
 function highlightPoint(){
  const root=$("pdfText");
@@ -233,8 +220,8 @@ function setButtons(){
   pointIndex<pointStarts().length-1?"Наступний пункт →":
   lessonIndex<lessons.length-1?"Наступний параграф →":"Завершити ✓";
  $("guideNote").textContent="§ "+(lessonIndex+1)+" · Пункт "+pointStart().number+
- " з "+pointStarts().length+" · стор. "+pointStart().page+"–"+pointLastPage()+
- (last?" · Після прочитання пройди 3 запитання.":" · Продовжуй читання на наступній сторінці; запитання будуть наприкінці пункту.");
+ " із "+pointStarts().length+" · стор. "+pointStart().page+"–"+pointLastPage()+
+ (answered?" · ✓ Перевірено":last?" · 3 запитання":"");
  $("questionIntro").textContent="Урокум підсвічує жовтим текст поточного пункту. Виділяй слова мишкою або читай весь пункт до кінця.";
 }
 async function renderPage(){
@@ -279,7 +266,11 @@ async function renderPage(){
   if(token!==generation)return;
   $("paperStatus").hidden=true;surface.hidden=false;
   // Wait for layout so page-relative positions are accurate.
-  requestAnimationFrame(()=>{if(token===generation){highlightPoint();setButtons()}});
+  requestAnimationFrame(()=>{
+   if(token!==generation)return;
+   highlightPoint();setButtons();
+   if(atPointEnd()&&completedPoints.has(pointKey()))showQuizCompletion(true);
+  });
  }catch(error){
   if(token!==generation)return;
   $("paperStatus").hidden=false;
@@ -325,16 +316,33 @@ async function startQuiz(text){
   }else{showReflections("ШІ не створив запитання: "+err.message)}
  }
 }
+function showQuizCompletion(alreadyDone=false){
+ const area=$("questionArea");area.replaceChildren();
+ const panel=document.createElement("div");panel.className="q-done";
+ const symbol=document.createElement("div");symbol.className="q-done-icon";symbol.textContent="✓";
+ const heading=document.createElement("h3");heading.textContent=alreadyDone?"Пункт уже перевірено":"Перевірку завершено!";
+ const description=document.createElement("p");
+ description.textContent=alreadyDone
+   ?"Результат збережений. Можеш продовжити з наступного пункту."
+   :"Ти відповіла на всі три запитання. Прогрес збережено.";
+ const continueButton=document.createElement("button");
+ continueButton.className="primary";
+ continueButton.textContent=pointIndex<pointStarts().length-1?"Наступний пункт →":
+   lessonIndex<lessons.length-1?"Наступний параграф →":"Завершити книгу ✓";
+ continueButton.onclick=()=>next();
+ panel.append(symbol,heading,description,continueButton);
+ area.append(panel);
+ const sidebar=document.querySelector(".questions");
+ if(sidebar)sidebar.scrollTop=0;
+}
 function afterQuiz(){
  quizzing=false;
- if(isSelectionQuiz){
-  $("questionIntro").textContent="Текст перевірено. Можеш продовжувати читання пункту.";
-  $("questionArea").replaceChildren();
-  setButtons();
- }else{
-  answered=true;completedPoints.add(pointKey());saveCompleted();saveProgress();setButtons();
-  $("guideNote").textContent="Усі 3 запитання завершено. Результат збережено — можна перейти до наступного пункту.";
- }
+ answered=true;
+ completedPoints.add(pointKey());
+ saveCompleted();
+ saveProgress();
+ setButtons();
+ showQuizCompletion();
 }
 function showQuestions(list,notice="Запитання створені ШІ за прочитаним пунктом"){
  let index=0;
