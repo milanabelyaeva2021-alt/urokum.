@@ -10,7 +10,7 @@
 <body>
 <header class="top"><div class="logo">Уро<span>кум</span></div><small>Читай · розумій · перевіряй себе</small></header>
 <main>
-<section id="home" class="panel"><span class="tag">ІНТЕРАКТИВНИЙ ПІДРУЧНИК</span><h1>Що будемо вивчати?</h1><p class="muted">Обери клас, щоб перейти до предметів і потрібного видання.</p><h2>Клас</h2><div class="grid" id="grades"></div></section>
+<section id="home" class="panel"><span class="tag">ІНТЕРАКТИВНИЙ ПІДРУЧНИК</span><h1>Що будемо вивчати?</h1><p class="muted">Обери клас, щоб перейти до предметів і потрібного видання.</p><div id="continueBook" class="empty hidden" style="margin-top:17px"></div><h2>Клас</h2><div class="grid" id="grades"></div></section>
 <section id="subjects" class="panel hidden"><button class="back" onclick="show('home')">← До класів</button><h1 id="subjectTitle"></h1><p class="muted">Обери предмет.</p><div class="grid" id="subjectGrid"></div></section>
 <section id="books" class="panel hidden"><button class="back" onclick="show('subjects')">← До предметів</button><h1 id="bookTitle"></h1><p class="muted">Обери електронний підручник. Текст відкривається за параграфами, без PDF-файлу.</p><div id="bookList"></div></section>
 <section id="reader" class="panel hidden"><button class="back" onclick="show('books')">← До підручників</button><span class="tag">НАВЧАЛЬНИЙ ПРОСТІР</span><h1 id="readerHeading">Підручник</h1><p class="muted">Завантаж PDF цього видання. Сторінки, ілюстрації, таблиці та карти залишаються в оригінальному вигляді.</p>
@@ -23,12 +23,25 @@
 </main>
 <script>
 const sections=['home','subjects','books','reader'];let grade=0,subject='',book='',bookId='',pageCount=0,currentPage=1,currentText='',currentSectionText='',outline=[],selectedSection=null,editMode=false;
-const $=id=>document.getElementById(id);function show(id){sections.forEach(x=>$(x).classList.toggle('hidden',x!==id))}
+const $=id=>document.getElementById(id);
+const knownReader='/page-reader.html?id=history11-gisem-stand';
+const preserveState=()=>{try{localStorage.setItem('urokum:last-selection',JSON.stringify({grade,subject,screen:'books'}))}catch{}};
+function show(id){sections.forEach(x=>$(x).classList.toggle('hidden',x!==id));if(id==='home')updateContinue();}
+function updateContinue(){
+ const card=$('continueBook');if(!card)return;
+ let last=null;try{last=JSON.parse(localStorage.getItem('urokum:last-selection')||'null')}catch{}
+ card.classList.remove('hidden');card.replaceChildren();
+ const title=document.createElement('b');title.textContent='📖 Продовжити читання';
+ const description=document.createElement('p');description.className='muted';
+ description.textContent='Історія України, 11 клас · О. Гісем, О. Мартинюк · рівень стандарту';
+ const button=document.createElement('button');button.className='primary';button.textContent='Відкрити підручник';
+ button.onclick=()=>location.href=knownReader;card.append(title,description,button);
+}
 const subjectsByGrade={1:['Українська мова','Математика','Я досліджую світ','Англійська мова'],2:['Українська мова','Математика','Я досліджую світ','Англійська мова'],3:['Українська мова','Математика','Я досліджую світ','Англійська мова'],4:['Українська мова','Математика','Я досліджую світ','Англійська мова'],5:['Українська мова','Математика','Історія','Пізнаємо природу','Англійська мова'],6:['Українська мова','Математика','Історія України','Всесвітня історія','Пізнаємо природу','Географія','Біологія','Англійська мова'],7:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],8:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],9:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],10:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова'],11:['Українська мова','Алгебра','Геометрія','Історія України','Всесвітня історія','Географія','Біологія','Фізика','Хімія','Англійська мова']};
 for(let i=1;i<=11;i++){let b=document.createElement('button');b.textContent=i+' клас';b.onclick=()=>chooseGrade(i);$('grades').append(b)}
-function chooseGrade(n){grade=n;$('subjectTitle').textContent=`${n} клас · Предмети`;$('subjectGrid').innerHTML='';(subjectsByGrade[n]||[]).forEach(s=>{let b=document.createElement('button');b.textContent=s;b.onclick=()=>chooseSubject(s);$('subjectGrid').append(b)});show('subjects')}
+function chooseGrade(n){grade=n;preserveState();$('subjectTitle').textContent=`${n} клас · Предмети`;$('subjectGrid').innerHTML='';(subjectsByGrade[n]||[]).forEach(s=>{let b=document.createElement('button');b.textContent=s;b.onclick=()=>chooseSubject(s);$('subjectGrid').append(b)});show('subjects')}
 async function chooseSubject(s){
- subject=s;$('bookTitle').textContent=grade+' клас · '+s;
+ subject=s;preserveState();$('bookTitle').textContent=grade+' клас · '+s;
  const list=$('bookList');list.replaceChildren();
  const status=document.createElement('div');status.className='muted';status.textContent='Шукаю електронні видання…';list.append(status);
  show('books');
@@ -38,7 +51,16 @@ async function chooseSubject(s){
   const catalog=await response.json();
   const books=catalog.filter(x=>x.grade===grade&&x.subject===s);
   list.replaceChildren();
-  if(!books.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Електронні підручники для цього предмета ще готуються. Після додавання тексту книги тут з’являться параграфи для читання.';list.append(empty);return}
+  if(!books.length){
+ const empty=document.createElement('div');empty.className='empty';
+ empty.textContent='Підручників для '+grade+' класу з цього предмета ще немає в каталозі. Книга Гісема й Мартинюка, яку ми додали, призначена для 11 класу.';
+ list.append(empty);
+ if(s==='Історія України'&&grade!==11){
+  const link=document.createElement('button');link.className='primary';link.textContent='Перейти до підручника Гісема за 11 клас';
+  link.style.marginTop='12px';link.onclick=()=>{chooseGrade(11);chooseSubject('Історія України')};list.append(link);
+ }
+ return
+}
   for(const x of books){
    const wrapper=document.createElement('div');wrapper.className='book';
    const info=document.createElement('div');
@@ -49,7 +71,7 @@ async function chooseSubject(s){
    const button=document.createElement('button');button.className='primary';
    button.textContent=x.available?'Читати електронний підручник':'Електронна версія готується';
    button.disabled=!x.available;
-   if(x.available)button.onclick=()=>{location.href=(x.mode==='printed'?'/page-reader.html?id=':'/e-reader.html?id=')+encodeURIComponent(x.id)};
+   if(x.available)button.onclick=()=>{preserveState();location.href=(x.mode==='printed'?'/page-reader.html?id=':'/e-reader.html?id=')+encodeURIComponent(x.id)};
    wrapper.append(info,button);list.append(wrapper);
   }
  }catch(error){list.replaceChildren();const msg=document.createElement('div');msg.className='empty';msg.textContent='Не вдалося завантажити електронний каталог: '+error.message;list.append(msg)}
@@ -71,5 +93,17 @@ function addTocItem(){let title=prompt('Назва розділу або пар�
 function editTocMode(){editMode=!editMode;renderOutline();$('tocEditor').classList.toggle('hidden',!editMode)}function editTocItem(it){let title=prompt('Назва пункту:',it.title);if(title===null)return;let page=Number(prompt('Перша сторінка:',it.page));let end=Number(prompt('Остання сторінка:',it.endPage||it.page));if(!title.trim()||!Number.isInteger(page)||page<1||page>pageCount||!Number.isInteger(end)||end<page||end>pageCount)return alert('Перевір назву та номери сторінок.');Object.assign(it,{title:title.trim(),page,endPage:end});renderOutline()}
 async function saveToc(){try{let r=await fetch(`/api/book/${bookId}/outline`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({outline})});let j=await r.json();if(!r.ok)throw Error(j.error);$('uploadStatus').textContent='Зміст збережено.'}catch(e){$('uploadStatus').textContent=e.message}}
 $('pageNumber').addEventListener('keydown',e=>{if(e.key==='Enter')goToPage()});
+(function restoreLastSelection(){
+ updateContinue();
+ const params=new URLSearchParams(location.search);
+ let saved=null;try{saved=JSON.parse(localStorage.getItem('urokum:last-selection')||'null')}catch{}
+ const incoming=Number(params.get('grade'));
+ const nextGrade=(incoming>=1&&incoming<=11)?incoming:Number(saved?.grade);
+ if(nextGrade>=1&&nextGrade<=11){
+  chooseGrade(nextGrade);
+  const wanted=params.get('subject')||saved?.subject;
+  if(wanted&&(subjectsByGrade[nextGrade]||[]).includes(wanted))chooseSubject(wanted);
+ }
+})();
 </script>
 </body></html>
