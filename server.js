@@ -327,11 +327,14 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
 });
 
 app.post("/api/tutor", async (req, res) => {
-  const { text, task } = req.body || {};
+  const { text, task, question } = req.body || {};
+  if (task === "ask-question" && (typeof question !== "string" || question.trim().length < 3 || question.length > 500)) return res.status(400).json({error:"Напиши коротке запитання до прочитаного пункту."});
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
   if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Потрібен GROQ_API_KEY (безкоштовний тариф) або OPENAI_API_KEY у захищених налаштуваннях Render." });
-  const prompt = task === "multi-checkpoint"
-    ? 'Створи РІВНО 3 різні змістовні тестові запитання українською за прочитаним ПОВНИМ пунктом підручника. Перевіряй розуміння причин, наслідків, фактів та понять лише з наведеного тексту. Не повторюй запитання. Поверни ЛИШЕ валідний JSON без markdown у форматі {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. У масиві questions повинно бути саме три об’єкти; індекс correct — ціле число 0..3. Не включай у відповідь інші поля й не вигадуй фактів.'
+  const prompt = task === "ask-question"
+    ? "Ти уважний учитель історії. Відповідай українською зрозуміло і по суті, спираючись на текст цього пункту. Пояснюй незнайомі поняття й причинно-наслідкові зв’язки. Якщо в пункті немає достатньо відомостей, чесно зазнач це, а не вигадуй. Запитання учня: " + question.trim().slice(0,500)
+    : task === "multi-checkpoint"
+    ? 'Створи РІВНО 4 різні змістовні тестові запитання українською за прочитаним ПОВНИМ пунктом підручника. Перевіряй розуміння причин, наслідків, фактів та понять лише з наведеного тексту. Не повторюй запитання. Поверни ЛИШЕ валідний JSON без markdown у форматі {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. У масиві questions повинно бути саме чотири об’єкти; індекс correct — ціле число 0..3. Не включай у відповідь інші поля й не вигадуй фактів.'
     : task === "test"
     ? "Створи 5 тестових запитань українською за фрагментом. Для кожного дай 4 варіанти (А, Б, В, Г), вкажи правильну відповідь і коротке пояснення. Не додавай фактів поза текстом."
     : task === "checkpoint"
@@ -397,14 +400,14 @@ app.post("/api/tutor", async (req, res) => {
         const parsed=JSON.parse(cleaned);
         if(task==="checkpoint")return res.json({quiz:parsed});
         const qs=parsed.questions;
-        if(!Array.isArray(qs)||qs.length!==3||qs.some(q=>
+        if(!Array.isArray(qs)||qs.length!==4||qs.some(q=>
           typeof q.question!=="string"||!Array.isArray(q.options)||q.options.length!==4||
           q.options.some(x=>typeof x!=="string")||!Number.isInteger(q.correct)||q.correct<0||q.correct>3))
           throw Error("Wrong quiz structure");
         return res.json({questions:qs});
       }catch(error){
         console.warn("AI quiz JSON invalid",error.message);
-        return res.status(502).json({error:"ШІ не повернув три коректні запитання. Спробуй ще раз."});
+        return res.status(502).json({error:"ШІ не повернув чотири коректні запитання. Спробуй ще раз."});
       }
     }
     res.json({ answer: output || "Не вдалося отримати відповідь." });
