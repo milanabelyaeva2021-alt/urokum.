@@ -239,6 +239,7 @@ app.get("/api/printed-book/history11-gisem-stand.pdf", async (req,res) => {
   }
 });
 app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Урокум" }));
+app.get("/api/ai-status", (_req, res) => res.json({ configured: Boolean(process.env.OPENAI_API_KEY) }));
 
 app.post("/api/upload", upload.single("pdf"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Завантаж PDF-файл." });
