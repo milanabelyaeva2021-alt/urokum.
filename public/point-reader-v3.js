@@ -18,7 +18,7 @@ const fallbackFirstPoint=[
 const style=document.createElement("style");
 style.textContent=
  '#pdfText span,#pdfText br{user-select:text;color:transparent;cursor:text}' +
- '#pdfText span.read-focus{background:rgba(255,196,35,.72)!important;mix-blend-mode:multiply;box-shadow:0 0 0 1px rgba(232,161,0,.36)}' +
+ '#pdfText span.read-focus{background:transparent!important;box-shadow:none!important;mix-blend-mode:normal!important}' +
  '#pdfText ::selection{background:rgba(110,71,207,.55)}' +
  '.q-option{display:block;width:100%;text-align:left;padding:12px;margin:9px 0;line-height:1.4}' +
  '.q-option.selected{border-color:#764da8;background:#eee5fa}' +
@@ -163,16 +163,22 @@ $("localPdf").addEventListener("change",async()=>{
  try{await loadBytes(new Uint8Array(await f.arrayBuffer()),true)}
  catch(e){$("paperStatus").textContent="Помилка: "+e.message;}
 });
-function collectPointText(page,items,start,end){
+// This edition prints its lesson text at 9.8pt. Captions, glossary
+// cards and exercises use 8.8pt; running headers sit above y=52.
+function isLessonTextItem(page,item,start,end){
+ if(!item||typeof item.str!=="string"||!/[А-Яа-яІіЇїЄєҐґA-Za-z]/u.test(item.str))return false;
+ const size=Math.abs(Number(item.height)||0);
+ if(size<9.30||size>10.55)return false;
  const height=page.view[3];
- const result=[];
- for(const item of items){
-  if(typeof item.str!=="string"||!item.str.trim())continue;
-  const y=height-(item.transform?.[5]||0);
-  if(y<32||y>height-31)continue;
-  if(comparePageRange(page.pageNumber,y,start,end))result.push(item.str.trim());
- }
- return result.join(" ");
+ const x=Number(item.transform?.[4]??0);
+ const y=height-Number(item.transform?.[5]??height);
+ if(!Number.isFinite(x)||!Number.isFinite(y)||x<30||x>height||y<51||y>height-38)return false;
+ if(/^\s*(?:§\s*\d|Розділ\s+\d|Розділ\s+[IVX])\b/iu.test(item.str))return false;
+ return comparePageRange(page.pageNumber,y,start,end);
+}
+function collectPointText(page,items,start,end){
+ return items.filter(item=>isLessonTextItem(page,item,start,end))
+   .map(item=>item.str.trim()).join(" ");
 }
 async function pointText(){
  const key=lessons[lessonIndex].id+":"+pointIndex;
@@ -199,15 +205,54 @@ function hidePublisherQR(ctx,base,bitmap,page){
  ctx.restore();
 }
 
-function highlightPoint(){
- const root=$("pdfText");
- const surface=$("pageSurface").getBoundingClientRect();
+function highlightPoint(page,items){
+ const layer=$("highlightLines");
+ layer.replaceChildren();
  const start=pointStart(),end=pointNext();
- for(const node of root.querySelectorAll("span")){
-  node.classList.remove("read-focus");
-  if(!node.textContent?.trim())continue;
-  const y=(node.getBoundingClientRect().top-surface.top)/pageScale;
-  if(comparePageRange(pageNo,y,start,end))node.classList.add("read-focus");
+ const boxes=[];
+ for(const item of items){
+  if(!isLessonTextItem(page,item,start,end))continue;
+  const fontSize=Number(item.height);
+  const x=Number(item.transform[4])*pageScale;
+  const baseline=(page.view[3]-Number(item.transform[5]))*pageScale;
+  const width=Math.max(0,Number(item.width||0)*pageScale);
+  if(!Number.isFinite(width)||width<2)continue;
+  boxes.push({
+   x:Math.max(0,x),y:Math.max(0,baseline-fontSize*pageScale*.90),
+   width,height:fontSize*pageScale*1.06
+  });
+ }
+ // Merge runs into individual lines. This prevents an uneven yellow
+ // rectangle around every word while keeping two-column text separate.
+ boxes.sort((a,b)=>a.y-b.y||a.x-b.x);
+ const rows=[];
+ for(const b of boxes){
+  let row=rows.find(r=>Math.abs(r.y-b.y)<Math.max(2,2*pageScale));
+  if(!row){row={y:b.y,blocks:[]};rows.push(row)}
+  row.blocks.push(b);
+ }
+ const surface=$("pageSurface");
+ const maxWidth=surface.clientWidth||Infinity,maxHeight=surface.clientHeight||Infinity;
+ for(const row of rows){
+  const blocks=row.blocks.sort((a,b)=>a.x-b.x);
+  let left=-1,right=0,top=0,bottom=0;
+  const draw=()=>{
+   if(left<0)return;
+   const x=Math.max(0,left-1), y=Math.max(0,top-.5);
+   const width=Math.min(maxWidth-x,right-left+2);
+   const height=Math.min(maxHeight-y,bottom-top+1);
+   if(width>2&&height>2){
+    const el=document.createElement("div");el.className="focus-line";
+    Object.assign(el.style,{left:x+"px",top:y+"px",width:width+"px",height:height+"px"});
+    layer.append(el);
+   }
+  };
+  for(const b of blocks){
+   if(left>=0 && b.x>right+12*pageScale){draw();left=-1}
+   if(left<0){left=b.x;right=b.x+b.width;top=b.y;bottom=b.y+b.height}
+   else{right=Math.max(right,b.x+b.width);top=Math.min(top,b.y);bottom=Math.max(bottom,b.y+b.height)}
+  }
+  draw();
  }
 }
 function setButtons(){
@@ -255,6 +300,7 @@ async function renderPage(){
   layer.style.setProperty("--scale-factor",String(pageScale));
   layer.style.setProperty("--total-scale-factor",String(pageScale));
   layer.replaceChildren();
+  $("highlightLines").replaceChildren();
   const task=p.render({canvasContext:ctx,viewport:bitmap});readingTask=task;
   await task.promise;if(token!==generation)return;
   hidePublisherQR(ctx,base,bitmap,pageNo);
@@ -268,7 +314,7 @@ async function renderPage(){
   // Wait for layout so page-relative positions are accurate.
   requestAnimationFrame(()=>{
    if(token!==generation)return;
-   highlightPoint();setButtons();
+   highlightPoint(p,items.items);setButtons();
    if(atPointEnd()&&completedPoints.has(pointKey()))showQuizCompletion(true);
   });
  }catch(error){
