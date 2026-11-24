@@ -46,6 +46,17 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
 .q-done p{margin:0;color:#655579;line-height:1.5;font-size:14px}
 .q-done .primary{width:100%;padding:14px 12px;line-height:1.35;font-weight:750}
 #questionArea{min-width:0}
+
+#highlightLines{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+#highlightLines .focus-line{position:absolute;border-radius:3px;background:rgba(246,207,117,.32);box-shadow:0 0 0 .25px rgba(175,119,26,.12)}
+#pdfText{z-index:2}
+#pdfText span.read-focus{background:transparent!important;box-shadow:none!important;mix-blend-mode:normal!important}
+.ask-panel{width:100%;margin-top:16px;padding-top:13px;border-top:1px solid #ebe4f3}
+.ask-panel summary{font-size:14px;font-weight:750;color:#55348a;cursor:pointer;line-height:1.5}
+.ask-panel label{display:block;font-size:13px;color:#736585;margin:11px 0 6px}
+.ask-panel textarea{width:100%;resize:vertical;min-height:77px;border:1px solid #d9cce9;border-radius:10px;font:inherit;font-size:14px;padding:11px;line-height:1.5;color:#342746}
+.ask-panel button{margin-top:8px;width:100%}
+#studentAnswer{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;font-size:14px;color:#302840;margin-top:12px}
 </style>
 </head>
 <body>
@@ -59,7 +70,7 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
  <p class="muted">Не вдалося завантажити сторінки автоматично. Можна відкрити файл із комп’ютера — він залишиться лише у твоєму браузері.</p>
  <label>Вибрати файл підручника <input id="localPdf" type="file" accept=".pdf,application/pdf"></label>
 </div>
-<div id="paper"><div id="paperStatus">Готую сторінку…</div><div id="pageSurface" hidden><canvas id="pageCanvas" aria-label="Оригінальна сторінка підручника"></canvas><div id="pdfText"></div></div></div>
+<div id="paper"><div id="paperStatus">Готую сторінку…</div><div id="pageSurface" hidden><canvas id="pageCanvas" aria-label="Оригінальна сторінка підручника"></canvas><div id="highlightLines" aria-hidden="true"></div><div id="pdfText"></div></div></div>
 <div id="guideNote">Читай підсвічений пункт цілком; після нього будуть три запитання.</div>
  <div class="controls"><button id="prevPage">← Попередня</button><button id="askQuestion" class="primary" disabled>🧠 Пункт прочитано — 3 запитання</button><button id="nextPage" disabled>Наступна сторінка →</button></div>
  <div class="status muted">Сторінки відтворюються в оригінальному оформленні: текст, таблиці, карти й ілюстрації.</div>
@@ -68,6 +79,13 @@ button:hover:not(:disabled){background:#f0e9fa}button:disabled{opacity:.5;cursor
  <h2>🧠 Учитель-ШІ</h2>
  <p id="questionIntro" hidden></p>
  <div id="questionArea"></div>
+<details class="ask-panel" id="askPanel">
+ <summary>💬 Запитати ШІ про цей пункт</summary>
+ <label for="studentQuestion">Що тобі незрозуміло?</label>
+ <textarea id="studentQuestion" maxlength="500" rows="3" placeholder="Наприклад: чому сталася ця подія?"></textarea>
+ <button id="sendStudentQuestion" type="button" class="primary">Запитати ШІ</button>
+ <div id="studentAnswer" role="status" aria-live="polite"></div>
+</details>
  
 </section>
 </div>
