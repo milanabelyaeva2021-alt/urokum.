@@ -153,7 +153,7 @@ async function loadBytes(data,store){
  if(doc.numPages!==288){await doc.destroy();throw Error("Потрібна книга Гісема на 288 сторінок.");}
  if(version!==pdfLoadVersion){await doc.destroy();return}
  if(pdf)await pdf.destroy().catch(()=>{});
- pdf=doc;if(store)await putCached(bytes.buffer);
+ pdf=doc;$("pdfRecovery").hidden=true;if(store)await putCached(bytes.buffer);
  $("message").hidden=true;$("app").hidden=false;
  await renderPage();
 }
@@ -187,6 +187,31 @@ async function pointText(){
  const result=sections.join("\n\n").replace(/\s+/g," ").trim().slice(0,18000);
  fullTextCache.set(key,result);return result;
 }
+// Coordinates measured from the uploaded 288-page textbook (PDF points, top-left).
+// Cover only the QR images; keep headings, paragraphs, tables and selectable text.
+const QR_TOPS = {"13":[66.4],"20":[192.8],"37":[62.4],"45":[241,419.6,493.3],"82":[494.1,314.4,416],"130":[493.7,218.8,414.9],"166":[345.5,419.2,492.9],"179":[437.7],"185":[240.7],"193":[303.9],"211":[370.5],"224":[269.3],"231":[341.9,424.8,251.2],"275":[328.9,416,490.5]};
+function hidePublisherQR(ctx,base,bitmap,page){
+ const tops=QR_TOPS[page]||[];
+ if(!tops.length)return;
+ const sx=bitmap.width/base.width,sy=bitmap.height/base.height;
+ ctx.save();ctx.fillStyle="#ffffff";
+ for(const y of tops)ctx.fillRect((388.373-0.9)*sx,(y-0.9)*sy,(56.64+1.8)*sx,(56.64+1.8)*sy);
+ ctx.restore();
+}
+async function checkAiAvailability(){
+ const label=$("aiStatus");
+ if(!label)return;
+ try{
+  const response=await fetch("/api/ai-status",{cache:"no-store"});
+  if(!response.ok)throw Error("Сервер не відповів");
+  const data=await response.json();
+  label.textContent=data.configured
+    ?"Ключ ШІ на сервері налаштований. Генерацію запитань перевіримо під час читання."
+    :"ШІ ще не налаштований на Render. Поки працюють підготовлені запитання та самоперевірка.";
+ }catch(error){label.textContent="Поки не вдалося перевірити підключення ШІ на сервері."}
+}
+checkAiAvailability();
+
 function highlightPoint(){
  const root=$("pdfText");
  const surface=$("pageSurface").getBoundingClientRect();
@@ -223,7 +248,7 @@ async function renderPage(){
  $("pageInfo").textContent="Стор. "+pageNo+" · пункт "+pointStart().number+" · § "+(lessonIndex+1);
  for(const b of document.querySelectorAll(".para"))b.classList.toggle("active",b.dataset.id===lesson.id);
  $("prevPage").disabled=lessonIndex===0&&pointIndex===0&&pageNo===lessons[lessonIndex].startPage;
- $("askSelected").disabled=true;$("activeExcerpt").textContent="";
+ 
  $("nextPage").disabled=true;$("askQuestion").disabled=true;
  saveProgress();
  try{
@@ -245,6 +270,7 @@ async function renderPage(){
   layer.replaceChildren();
   const task=p.render({canvasContext:ctx,viewport:bitmap});readingTask=task;
   await task.promise;if(token!==generation)return;
+  hidePublisherQR(ctx,base,bitmap,pageNo);
   const items=await p.getTextContent();if(token!==generation)return;
   try{
    const tl=new pdfjs.TextLayer({textContentSource:items,container:layer,viewport:view});
@@ -257,26 +283,11 @@ async function renderPage(){
  }catch(error){
   if(token!==generation)return;
   $("paperStatus").hidden=false;
-  $("paperStatus").textContent="Не вдалося відкрити сторінку. Спробуй свій PDF у полі вище.";
+  $("paperStatus").textContent="Не вдалося відкрити сторінку. Можеш вибрати свій PDF у блоці відновлення.";
+  $("pdfRecovery").hidden=false;
   console.error(error);
  }
 }
-function selectedText(){
- const selection=window.getSelection(),root=$("pdfText");
- if(!selection||selection.isCollapsed||!selection.rangeCount)return "";
- if(!root.contains(selection.anchorNode)||!root.contains(selection.focusNode))return "";
- return selection.toString().replace(/\s+/g," ").trim().slice(0,3000);
-}
-document.addEventListener("selectionchange",()=>{
- storedText=selectedText();
- $("askSelected").disabled=!storedText||!pdf;
- $("activeExcerpt").textContent=storedText?"Виділено: «"+storedText.slice(0,190)+(storedText.length>190?"…":"")+"»":"";
-});
-$("askSelected").onclick=async()=>{
- const part=selectedText()||storedText;
- if(!part)return;
- isSelectionQuiz=true;await startQuiz(part);
-};
 $("askQuestion").onclick=async()=>{
  if(!atPointEnd()||answered||quizzing)return;
  isSelectionQuiz=false;
@@ -423,10 +434,11 @@ async function main(){
    const doc=await pdfjs.getDocument({url:PDF_URL,rangeChunkSize:262144}).promise;
    if(version!==pdfLoadVersion){await doc.destroy();return}
    if(doc.numPages!==288){await doc.destroy();throw Error("Знайдено іншу книгу");}
-   pdf=doc;await renderPage();
+   pdf=doc;$("pdfRecovery").hidden=true;await renderPage();
   }catch(error){
    console.warn("Publisher PDF unavailable",error);
    if(pdf)return;
+   $("pdfRecovery").hidden=false;
    $("paperStatus").hidden=false;
    $("paperStatus").textContent="Зміст збережено. Але зовнішнє джерело книги зараз недоступне. Натисни «Відкрити свій PDF» вище: це потрібно один раз у цьому браузері.";
    $("guideNote").textContent="Вибір класу, параграфа й пункту збережено. Після вибору PDF можна продовжити з тієї самої сторінки.";
