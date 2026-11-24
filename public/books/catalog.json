@@ -1,17 +1,5 @@
 [
   {
-    "id": "history11-demo",
-    "grade": 11,
-    "subject": "Історія України",
-    "author": "Урокум",
-    "title": "Історія України — приклад електронного читання",
-    "level": "Демонстрація інтерфейсу",
-    "year": "",
-    "available": true,
-    "demo": true,
-    "file": "books/history11-demo.json"
-  },
-  {
     "id": "history11-gisem-stand",
     "grade": 11,
     "subject": "Історія України",
