@@ -173,7 +173,7 @@ function isLessonTextItem(page,item,start,end){
  const height=page.view[3];
  const x=Number(item.transform?.[4]??0);
  const y=height-Number(item.transform?.[5]??height);
- if(!Number.isFinite(x)||!Number.isFinite(y)||x<30||x>height||y<51||y>height-38)return false;
+ if(!Number.isFinite(x)||!Number.isFinite(y)||x<29||x>page.view[2]-20||y<51||y>height-38)return false;
  if(/^\s*(?:§\s*\d|Розділ\s+\d|Розділ\s+[IVX])\b/iu.test(item.str))return false;
  return comparePageRange(page.pageNumber,y,start,end);
 }
