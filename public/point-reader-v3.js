@@ -196,7 +196,7 @@ function lessonLineSegments(page,items,start,end){
   for(const piece of row.items){
    // The wide gap between a glossary or picture caption and the
    // main column is a genuine region boundary, not a word space.
-   if(current.length && piece.x-right>18){segments.push(current);current=[]}
+   if(current.length && piece.x-right>12){segments.push(current);current=[]}
    current.push(piece);right=Math.max(right,piece.x+piece.width);
   }
   if(current.length)segments.push(current);
