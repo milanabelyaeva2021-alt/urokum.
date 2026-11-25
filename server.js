@@ -327,19 +327,26 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
 });
 
 app.post("/api/tutor", async (req, res) => {
-  const { text, task, question, retelling } = req.body || {};
+  const { text, task, question, retelling, studentAnswer, referenceAnswer } = req.body || {};
   if (task === "ask-question" && (typeof question !== "string" || question.trim().length < 3 || question.length > 500)) return res.status(400).json({error:"Напиши коротке запитання до прочитаного пункту."});
   if (task === "assess-retelling" && (typeof retelling !== "string" || retelling.trim().length < 30 || retelling.length > 2500)) return res.status(400).json({error:"Напиши переказ хоча б у кількох реченнях (до 2500 символів)."});
+  if (task === "check-open" && (
+    typeof question !== "string" || question.length < 5 || question.length > 500 ||
+    typeof studentAnswer !== "string" || studentAnswer.trim().length < 5 || studentAnswer.length > 1800 ||
+    typeof referenceAnswer !== "string" || referenceAnswer.length < 5 || referenceAnswer.length > 2000
+  )) return res.status(400).json({ error: "Напиши відповідь своїми словами, щоб ШІ міг її перевірити." });
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
   if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Потрібен GROQ_API_KEY (безкоштовний тариф) або OPENAI_API_KEY у захищених налаштуваннях Render." });
-  const prompt = task === "paragraph-review"
+  const prompt = task === "check-open"
+    ? "Ти доброзичливий учитель історії. Перевір відповідь учня за матеріалом пункту підручника. Поясни, що правильно, що неточно, і що ще варто згадати. Не вимагай дослівного збігу з прикладом відповіді. Не вигадуй фактів. Дай короткий відгук українською (3–5 речень). Запитання: "+question.trim().slice(0,500)+"\\nВідповідь учня: "+studentAnswer.trim().slice(0,1800)+"\\nОрієнтовна відповідь: "+referenceAnswer.trim().slice(0,2000)
+    : task === "paragraph-review"
     ? 'Зроби підсумкову САМОСТІЙНУ РОБОТУ з рівно 6 різних тестових запитань українською за всім параграфом. Два на факти, два на розуміння причин і наслідків, два на узагальнення. Тільки відомості з тексту. Поверни виключно JSON {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. Обов’язково 6 запитань, 4 відповіді у кожному, індекс correct 0..3.'
     : task === "assess-retelling"
     ? "Ти доброзичливий учитель. Оціни переказ параграфа за наданим текстом. Спочатку відзнач 2 конкретні сильні сторони, потім 2 важливі пропущені чи переплутані факти (якщо є), а вкінці запропонуй один крок, як покращити переказ. Без вигаданих фактів і без оцінки балами. Переказ учня: " + retelling.trim().slice(0,2500)
     : task === "ask-question"
     ? "Ти уважний учитель історії. Відповідай українською зрозуміло і по суті, спираючись на текст цього пункту. Пояснюй незнайомі поняття й причинно-наслідкові зв’язки. Якщо в пункті немає достатньо відомостей, чесно зазнач це, а не вигадуй. Запитання учня: " + question.trim().slice(0,500)
     : task === "multi-checkpoint"
-    ? 'Створи РІВНО 4 різні змістовні тестові запитання українською за прочитаним ПОВНИМ пунктом підручника. Перевіряй розуміння причин, наслідків, фактів та понять лише з наведеного тексту. Не повторюй запитання. Поверни ЛИШЕ валідний JSON без markdown у форматі {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. У масиві questions повинно бути саме чотири об’єкти; індекс correct — ціле число 0..3. Не включай у відповідь інші поля й не вигадуй фактів.'
+    ? 'Склади РІВНО 5 запитань для активного навчання за прочитаним пунктом підручника українською: ПЕРШІ 3 запитання — з чотирма варіантами вибору; ОСТАННІ 2 — відкриті, на які учень відповідає своїми словами. Дотримуйся порядку та не вигадуй фактів поза наданим текстом. Поверни ВИКЛЮЧНО валідний JSON без markdown у форматі {"questions":[{"type":"choice","question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."},{"type":"choice","question":"...","options":["...","...","...","..."],"correct":1,"explanation":"..."},{"type":"choice","question":"...","options":["...","...","...","..."],"correct":2,"explanation":"..."},{"type":"open","question":"...","referenceAnswer":"коротка орієнтовна відповідь за текстом"},{"type":"open","question":"...","referenceAnswer":"коротка орієнтовна відповідь за текстом"}]}. Для choice correct — індекс правильної відповіді 0..3. Відкриті запитання мають вимагати пояснення причин чи порівняння, а не одного слова.'
     : task === "test"
     ? "Створи 5 тестових запитань українською за фрагментом. Для кожного дай 4 варіанти (А, Б, В, Г), вкажи правильну відповідь і коротке пояснення. Не додавай фактів поза текстом."
     : task === "checkpoint"
@@ -405,9 +412,14 @@ app.post("/api/tutor", async (req, res) => {
         const parsed=JSON.parse(cleaned);
         if(task==="checkpoint")return res.json({quiz:parsed});
         const qs=parsed.questions;
-        if(!Array.isArray(qs)||qs.length!==(task==="paragraph-review"?6:4)||qs.some(q=>
-          typeof q.question!=="string"||!Array.isArray(q.options)||q.options.length!==4||
-          q.options.some(x=>typeof x!=="string")||!Number.isInteger(q.correct)||q.correct<0||q.correct>3))
+        if(!Array.isArray(qs)||qs.length!==(task==="paragraph-review"?6:5)||qs.some((q,i)=>{
+          if(!q || typeof q.question!=="string" || q.question.trim().length<5)return true;
+          if(task==="multi-checkpoint" && i>=3){
+            return q.type!=="open" || typeof q.referenceAnswer!=="string" || q.referenceAnswer.trim().length<8;
+          }
+          return !Array.isArray(q.options) || q.options.length!==4 ||
+            q.options.some(x=>typeof x!=="string") || !Number.isInteger(q.correct) || q.correct<0 || q.correct>3;
+        }))
           throw Error("Wrong quiz structure");
         return res.json({questions:qs});
       }catch(error){
