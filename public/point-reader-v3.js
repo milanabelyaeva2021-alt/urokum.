@@ -166,22 +166,58 @@ $("localPdf").addEventListener("change",async()=>{
  try{await loadBytes(new Uint8Array(await f.arrayBuffer()),true)}
  catch(e){$("paperStatus").textContent="Помилка: "+e.message;}
 });
-// This edition prints its lesson text at 9.8pt. Captions, glossary
-// cards and exercises use 8.8pt; running headers sit above y=52.
-function isLessonTextItem(page,item,start,end){
- if(!item||typeof item.str!=="string"||!/[А-Яа-яІіЇїЄєҐґA-Za-z]/u.test(item.str))return false;
- const size=Math.abs(Number(item.height)||0);
- if(size<9.30||size>10.55)return false;
- const height=page.view[3];
- const x=Number(item.transform?.[4]??0);
- const y=height-Number(item.transform?.[5]??height);
- if(!Number.isFinite(x)||!Number.isFinite(y)||x<29||x>page.view[2]-20||y<51||y>height-38)return false;
- if(/^\s*(?:§\s*\d|Розділ\s+\d|Розділ\s+[IVX])\b/iu.test(item.str))return false;
- return comparePageRange(page.pageNumber,y,start,end);
+// PDF.js may split a printed line into many differently styled fragments.
+// Select whole body-text lines instead of checking each word's font size;
+// this keeps bold/italic words while excluding captions and smaller glossary text.
+function lessonLineSegments(page,items,start,end){
+ const width=page.view[2],height=page.view[3];
+ const candidates=[];
+ for(const item of items||[]){
+  if(typeof item.str!=="string"||!/[А-Яа-яІіЇїЄєҐґA-Za-z]/u.test(item.str))continue;
+  const x=Number(item.transform?.[4]), y=height-Number(item.transform?.[5]);
+  const w=Number(item.width||0), size=Math.abs(Number(item.height)||0);
+  if(![x,y,w,size].every(Number.isFinite)||x<28||x>width-18||w<=0||size<6.7||size>15.8||y<51||y>height-36)continue;
+  if(!comparePageRange(page.pageNumber,y,start,end))continue;
+  if(/^\s*(?:§\s*\d|Розділ\s+(?:\d|[IVX]))\b/iu.test(item.str))continue;
+  candidates.push({x,y,width:w,size,item,chars:item.str.trim().length});
+ }
+ candidates.sort((a,b)=>a.y-b.y||a.x-b.x);
+ const lines=[];
+ for(const piece of candidates){
+  let line=lines.find(row=>Math.abs(row.y-piece.y)<=2.7);
+  if(!line){line={y:piece.y,items:[]};lines.push(line)}
+  line.items.push(piece);
+ }
+ const result=[];
+ for(const row of lines){
+  row.items.sort((a,b)=>a.x-b.x);
+  const segments=[];let current=[],right=-Infinity;
+  for(const piece of row.items){
+   // The wide gap between a glossary or picture caption and the
+   // main column is a genuine region boundary, not a word space.
+   if(current.length && piece.x-right>18){segments.push(current);current=[]}
+   current.push(piece);right=Math.max(right,piece.x+piece.width);
+  }
+  if(current.length)segments.push(current);
+  for(const segment of segments){
+   const chars=segment.reduce((n,x)=>n+x.chars,0);
+   const bodyChars=segment.reduce((n,x)=>
+     n+(x.size>=9.1&&x.size<=10.9?x.chars:0),0);
+   const minX=Math.min(...segment.map(x=>x.x));
+   const maxX=Math.max(...segment.map(x=>x.x+x.width));
+   // Evaluate the line as a whole. When the majority of its text has
+   // body typography, also include any bold / italic pieces on that line.
+   if(chars<5||maxX-minX<19||bodyChars<5||bodyChars/chars<.48)continue;
+   result.push({y:row.y,parts:segment,x:minX,right:maxX,
+     height:Math.max(...segment.map(x=>x.size))});
+  }
+ }
+ return result;
 }
 function collectPointText(page,items,start,end){
- return items.filter(item=>isLessonTextItem(page,item,start,end))
-   .map(item=>item.str.trim()).join(" ");
+ return lessonLineSegments(page,items,start,end).map(row=>
+  row.parts.map(part=>part.item.str.trim()).join(" ")
+ ).join(" ");
 }
 async function pointText(){
  const key=lessons[lessonIndex].id+":"+pointIndex;
@@ -209,53 +245,20 @@ function hidePublisherQR(ctx,base,bitmap,page){
 }
 
 function highlightPoint(page,items){
- const layer=$("highlightLines");
- layer.replaceChildren();
- const start=pointStart(),end=pointNext();
- const boxes=[];
- for(const item of items){
-  if(!isLessonTextItem(page,item,start,end))continue;
-  const fontSize=Number(item.height);
-  const x=Number(item.transform[4])*pageScale;
-  const baseline=(page.view[3]-Number(item.transform[5]))*pageScale;
-  const width=Math.max(0,Number(item.width||0)*pageScale);
-  if(!Number.isFinite(width)||width<2)continue;
-  boxes.push({
-   x:Math.max(0,x),y:Math.max(0,baseline-fontSize*pageScale*.90),
-   width,height:fontSize*pageScale*1.06
+ const layer=$("highlightLines");layer.replaceChildren();
+ const segments=lessonLineSegments(page,items,pointStart(),pointNext());
+ const maxWidth=$("pageSurface").clientWidth,maxHeight=$("pageSurface").clientHeight;
+ for(const row of segments){
+  const top=Math.max(0,(row.y-row.height*.87)*pageScale);
+  const left=Math.max(0,(row.x-1)*pageScale);
+  const width=Math.min(maxWidth-left,(row.right-row.x+2.5)*pageScale);
+  const height=Math.min(maxHeight-top,Math.min(14,row.height*1.07)*pageScale);
+  if(width<=3||height<=3)continue;
+  const line=document.createElement("div");line.className="focus-line";
+  Object.assign(line.style,{
+   left:left+"px",top:top+"px",width:width+"px",height:height+"px"
   });
- }
- // Merge runs into individual lines. This prevents an uneven yellow
- // rectangle around every word while keeping two-column text separate.
- boxes.sort((a,b)=>a.y-b.y||a.x-b.x);
- const rows=[];
- for(const b of boxes){
-  let row=rows.find(r=>Math.abs(r.y-b.y)<Math.max(2,2*pageScale));
-  if(!row){row={y:b.y,blocks:[]};rows.push(row)}
-  row.blocks.push(b);
- }
- const surface=$("pageSurface");
- const maxWidth=surface.clientWidth||Infinity,maxHeight=surface.clientHeight||Infinity;
- for(const row of rows){
-  const blocks=row.blocks.sort((a,b)=>a.x-b.x);
-  let left=-1,right=0,top=0,bottom=0;
-  const draw=()=>{
-   if(left<0)return;
-   const x=Math.max(0,left-1), y=Math.max(0,top-.5);
-   const width=Math.min(maxWidth-x,right-left+2);
-   const height=Math.min(maxHeight-y,bottom-top+1);
-   if(width>2&&height>2){
-    const el=document.createElement("div");el.className="focus-line";
-    Object.assign(el.style,{left:x+"px",top:y+"px",width:width+"px",height:height+"px"});
-    layer.append(el);
-   }
-  };
-  for(const b of blocks){
-   if(left>=0 && b.x>right+12*pageScale){draw();left=-1}
-   if(left<0){left=b.x;right=b.x+b.width;top=b.y;bottom=b.y+b.height}
-   else{right=Math.max(right,b.x+b.width);top=Math.min(top,b.y);bottom=Math.max(bottom,b.y+b.height)}
-  }
-  draw();
+  layer.append(line);
  }
 }
 function setButtons(){
