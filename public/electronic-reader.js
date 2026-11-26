@@ -85,6 +85,12 @@ function renderEbookBlocks(host,blocks){
    }
    details.append(dl);host.append(details);continue;
   }
+  if(block.type==="note"){
+   const details=make("details","ebook-fact");
+   details.append(make("summary",null,"✨ "+(block.title||"Цікавий факт")));
+   details.append(make("p",null,block.text||""));
+   host.append(details);continue;
+  }
   if(block.type==="source"){
    const details=make("details","ebook-source");
    details.append(make("summary",null,"📜 "+(block.title||"Історичне джерело")));
