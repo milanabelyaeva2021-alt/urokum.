@@ -156,6 +156,14 @@ h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;marg
 .reader-restart .restart-paragraph{min-height:40px;padding:8px 13px;font-size:13px}
 @media(max-width:730px){.top{gap:9px;flex-wrap:wrap}.top-actions{margin-left:auto;gap:5px;flex-wrap:wrap;justify-content:flex-end}.top-actions .iconBtn{min-height:37px;padding:7px 9px;font-size:12px}.top-font-controls .font-btn{min-width:30px;min-height:30px;font-size:12px}}
 @media(max-width:450px){.brand{font-size:21px}.brand-mark{width:29px;height:34px;font-size:20px}.top{padding:8px 0}.top-actions{width:100%;justify-content:space-between}.top-font-controls{order:1}}
+
+/* Reading-first layout: keep the actual textbook paragraph at the top. */
+.reader{padding-top:2px}
+.ebook-source-highlight{background:#f9dd8e;color:#251a34;box-decoration-break:clone;-webkit-box-decoration-break:clone;border-radius:3px;padding:0 2px;outline:2px solid #e8b941}
+:root[data-theme="dark"] .ebook-source-highlight{background:#a68232;color:#fff7db;outline-color:#deb54f}
+.source-back-link{margin:12px 0 0;display:flex;flex-wrap:wrap;gap:9px}
+.source-note{font-size:13px;line-height:1.55;color:var(--muted);margin-top:8px}
+mark.ebook-source-highlight{transition:background-color .2s}
 </style>
 </head>
 <body>
@@ -187,10 +195,7 @@ h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;marg
  <div id="bookShell" hidden>
   <div class="eyebrow" id="lessonEyebrow">Історія України · 11 клас</div>
   <h1 id="lessonTitle">Електронний підручник</h1>
-  <p class="subtitle" id="lessonSubtitle"></p>
-  <div class="reader-restart"><button id="restartParagraphBtn" type="button" class="secondary restart-paragraph" hidden>↻ Пройти параграф знову</button></div>
   <article class="reader">
-   <div class="pointLabel"><span class="pointNumber" id="pointNumber">1</span><span id="pointLabel">Пункт 1</span></div>
    <div class="ebookText" id="ebookText"></div>
    <div class="readEnd" id="readEnd">
     <p class="hint">Коли дочитаєш пункт, перевір, що ти зрозумів(ла).</p>
