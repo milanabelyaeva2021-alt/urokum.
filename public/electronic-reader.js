@@ -2,11 +2,12 @@ const $=id=>document.getElementById(id);
 const BOOK="history11-gisem-stand";
 const SAVE="urokum:ebook-reading:"+BOOK, DONE="urokum:ebook-finished:"+BOOK,
  REVIEW_DONE="urokum:ebook-reviews:"+BOOK, SKIPPED="urokum:ebook-skipped:"+BOOK,
- QUIZ_CACHE="urokum:ebook-quiz-cache:"+BOOK;
+ QUIZ_CACHE="urokum:ebook-quiz-cache:"+BOOK,
+ ATTEMPTS="urokum:ebook-attempts:"+BOOK, FONT_SIZE="urokum:ebook-font-size:"+BOOK;
 let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
 let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null,quizRun=0;
-let locallySavedQuestions={};
-const textCache=new Map();
+let locallySavedQuestions={},pointAttempts={},readerFontSize=19;
+const textCache=new Map(),summaryCache=new Map();
 
 function fromStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
 function toStore(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch{}}
@@ -14,6 +15,34 @@ function lessonQuizKey(){
  let n=5381,text=String(current?.text||"");
  for(let i=0;i<text.length;i++)n=(((n<<5)+n)^text.charCodeAt(i))>>>0;
  return lessons[lessonIndex].id+":"+(pointIndex+1)+":"+n.toString(16)+":"+text.length;
+}
+function pointId(i=lessonIndex,j=pointIndex){return lessons[i]?.id+":"+(j+1)}
+function clampFont(v){return Math.max(15,Math.min(26,Number(v)||19))}
+function applyFontSize(v){
+ readerFontSize=clampFont(v);
+ document.documentElement.style.setProperty("--reader-font-size",readerFontSize+"px");
+ toStore(FONT_SIZE,readerFontSize);
+ $("fontSmaller").disabled=readerFontSize<=15;
+ $("fontLarger").disabled=readerFontSize>=26;
+}
+$("fontSmaller").onclick=()=>applyFontSize(readerFontSize-1);
+$("fontReset").onclick=()=>applyFontSize(19);
+$("fontLarger").onclick=()=>applyFontSize(readerFontSize+1);
+function updateRestartButton(){
+ if(!lessons[lessonIndex])return;
+ const count=(points[lessons[lessonIndex].id]||[]).length;
+ $("restartParagraphBtn").hidden=!Array.from({length:count},(_,j)=>pointId(lessonIndex,j)).some(key=>
+   completed.has(key)||skipped.has(key)||Boolean(pointAttempts[key]));
+}
+$("restartParagraphBtn").onclick=()=>restartParagraph();
+function restartParagraph(){
+ const lesson=lessons[lessonIndex];if(!lesson)return;
+ for(let j=0;j<(points[lesson.id]||[]).length;j++){
+  completed.delete(lesson.id+":"+(j+1));skipped.delete(lesson.id+":"+(j+1));
+ }
+ toStore(DONE,[...completed]);toStore(SKIPPED,[...skipped]);
+ $("paragraphSummary").hidden=true;
+ loadPoint(lessonIndex,0);
 }
 const safeText=value=>String(value||"").replace(/[\u00ad\u200b\ufeff]/g,"").replace(/\s+/g," ").trim();
 function explainMarkup(root,text){
@@ -214,7 +243,7 @@ async function loadPoint(i,j){
  storeLocation();
  $("bookShell").hidden=true;$("loading").hidden=false;
  $("loading").textContent="Готую електронний текст пункту "+(j+1)+"…";
- $("quiz").hidden=true;$("finished").hidden=true;$("review").hidden=true;
+ $("quiz").hidden=true;$("finished").hidden=true;$("review").hidden=true;$("paragraphSummary").hidden=true;
  const qs=$("studentQuestion");qs.value="";$("answerFromAI").hidden=true;
  try{
   const data=await fetchPoint(i,j);
@@ -231,7 +260,7 @@ async function loadPoint(i,j){
   if(Array.isArray(data.blocks)&&data.blocks.length)renderEbookBlocks(host,data.blocks);
   else{host.replaceChildren();data.paragraphs.forEach(part=>host.append(make("p",null,part)))}
   $("loading").hidden=true;$("bookShell").hidden=false;
-  progress();
+  progress();updateRestartButton();
   const done=completed.has(lesson.id+":"+(j+1));
   const passed=skipped.has(lesson.id+":"+(j+1));
   $("readEnd").hidden=done||passed;
@@ -515,7 +544,8 @@ $("sendQuestion").onclick=async()=>{
 };
 async function init(){
  completed=new Set(fromStore(DONE,[]));reviews=new Set(fromStore(REVIEW_DONE,[]));skipped=new Set(fromStore(SKIPPED,[]));
- locallySavedQuestions=fromStore(QUIZ_CACHE,{});
+ locallySavedQuestions=fromStore(QUIZ_CACHE,{});pointAttempts=fromStore(ATTEMPTS,{});
+ applyFontSize(fromStore(FONT_SIZE,19));
  try{
   const [a,b]=await Promise.all([
    fetch("/books/h11/outline.json",{cache:"no-store"}),
