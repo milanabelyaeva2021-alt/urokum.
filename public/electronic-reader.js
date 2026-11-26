@@ -403,127 +403,235 @@ async function startQuiz(){
   card.append(retry,back,skip);
  }
 }
+function quizStepBar(state){
+ const steps=make("ol","quizSteps");steps.style.gridTemplateColumns="repeat("+state.questions.length+",minmax(0,1fr))";
+ steps.setAttribute("aria-label","Прогрес перевірки");
+ for(let i=0;i<state.questions.length;i++){
+  const result=state.results?.[i];
+  const kind=result?.status==="correct"?"correct":result?.status==="wrong"?"wrong":
+    result?.status==="skipped"||result?.status==="ungraded"?"skipped":i===state.index?"current":"pending";
+  const step=make("li","quizStep "+kind);
+  step.append(make("span","bar"),make("span","step-label",(i+1)+(result?.status==="correct"?" ✓":result?.status==="wrong"?" ✕":"")));
+  steps.append(step);
+ }
+ return steps;
+}
 function showQuestion(){
- const state=quizState;if(!state)return;
- const q=state.questions[state.index],card=$("quiz");
- card.replaceChildren();
- const label=make("span","pill",state.mode==="point"?"Зупинка":"Самостійна робота");
- card.append(label,make("p","qNo","Запитання "+(state.index+1)+" / "+state.questions.length),
+ const state=quizState;
+ if(!state || state.index>=state.questions.length)return;
+ if(!Array.isArray(state.results))state.results=[];
+ const index=state.index,q=state.questions[index],card=$("quiz");
+ card.hidden=false;card.replaceChildren();
+ card.append(quizStepBar(state));
+ const label=make("span","pill",state.mode==="point"?"Навчальна зупинка":
+  state.mode==="practice"?"Повторення складного":"Самостійна робота");
+ card.append(label,make("p","qNo","Запитання "+(index+1)+" із "+state.questions.length),
   make("h2","questionText",q.question));
  const feedback=make("div","quizFeedback");feedback.hidden=true;
  let verified=false;
- const next=make("button","primary",state.index===state.questions.length-1?
+ const current=()=>quizState===state&&state.index===index&&loadToken===state.loadVersion;
+ const next=make("button","primary",index===state.questions.length-1?
    "Завершити перевірку":"Наступне запитання →");
  next.onclick=()=>{
-  if(!verified)return;
-  state.index++;
+  if(!verified||!current())return;
+  next.disabled=true;state.index++;
   if(state.index===state.questions.length){finishQuiz(state.mode);return}
   showQuestion();go($("quiz"));
  };
+ const record=(result,message)=>{
+  if(verified||!current())return;
+  verified=true;state.results[index]={question:q.question,type:q.type||"choice",...result};
+  if(result.status==="correct")state.done=(state.done||0)+1;
+  feedback.hidden=false;
+  feedback.className="quiz-feedback-box "+(result.status==="correct"?"is-correct":
+    result.status==="wrong"?"is-wrong":"is-neutral");
+  explainMarkup(feedback,message);
+  card.append(next);go(feedback);
+ };
  const skipOne=make("button","secondary",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");
  skipOne.onclick=()=>{
-  if(verified)return;
+  if(verified||!current())return;
   verified=true;state.skipped=(state.skipped||0)+1;
+  state.results[index]={status:"skipped",question:q.question,type:q.type||"choice",correctAnswer:
+    q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||""};
   state.index++;
   if(state.index===state.questions.length)finishQuiz(state.mode);
   else{showQuestion();go($("quiz"))}
  };
- const acceptAnswer=(message,correct)=>{
-  if(verified)return;
-  verified=true;
-  if(correct)state.done++;
-  feedback.hidden=false;explainMarkup(feedback,message);
-  card.append(next);
-  go(feedback);
- };
  if(q.type==="open"){
-  const hint=make("p","small","Напиши відповідь власними словами — ШІ перевірить розуміння, а не дослівний збіг.");
+  const hint=make("p","small","Відповідай своїми словами: ШІ перевірить зміст, а не дослівний збіг.");
   const input=make("textarea","written");input.rows=5;input.maxLength=1800;
   input.placeholder="Моя відповідь…";
   const check=make("button","primary","Перевірити письмову відповідь");
   check.onclick=async()=>{
-   if(verified)return;
+   if(verified||!current())return;
    const answer=input.value.trim();
    if(answer.length<5){feedback.hidden=false;feedback.textContent="Напиши хоча б одне речення.";return}
    check.disabled=true;input.readOnly=true;
-   feedback.hidden=false;feedback.textContent="ШІ читає відповідь…";
-   const version=loadToken;
+   feedback.hidden=false;feedback.className="quiz-feedback-box is-neutral";
+   feedback.textContent="ШІ перевіряє твою відповідь…";
    try{
-    const response=await aiCall("check-open",{
-     text:current.text.slice(0,14700),question:q.question,
+    const data=await aiCall("check-open",{
+     text:window.currentLessonText||globalLessonText(),question:q.question,
      studentAnswer:answer,referenceAnswer:q.referenceAnswer
     });
-    if(version!==loadToken)return;
-    acceptAnswer(response.answer||"Відповідь прийнята.",true);
+    if(!current()||verified)return;
+    const status=data.passed===true?"correct":data.passed===false?"wrong":"ungraded";
+    record({status,userAnswer:answer,correctAnswer:q.referenceAnswer,explanation:data.answer||""},
+      (status==="correct"?"✓ Правильно. ":status==="wrong"?"✕ Ще не зовсім. ":"Перевірка без оцінки. ")+
+      (data.answer||"Орієнтовна відповідь: "+q.referenceAnswer));
    }catch(error){
-    if(version!==loadToken)return;
-    acceptAnswer("Зв’язок із ШІ перервався. Орієнтовна відповідь: "+q.referenceAnswer,false);
+    if(!current()||verified)return;
+    record({status:"ungraded",userAnswer:answer,correctAnswer:q.referenceAnswer,
+      explanation:"ШІ зараз не відповідає."},
+      "ШІ зараз недоступний, тому не зараховую відповідь як правильну. Орієнтовна відповідь: "+q.referenceAnswer);
    }
   };
   card.append(hint,input,check,skipOne,feedback);return;
  }
  let chosen=-1;
  const answers=make("div","answers");
- const buttons=q.options.map((answer,i)=>{
+ const buttons=q.options.map((option,i)=>{
   const button=make("button","choice");button.type="button";
-  button.append(make("b",null,"АБВГ"[i]),make("span",null,answer));
+  button.append(make("b",null,"АБВГ"[i]),make("span","answer-text",option),make("span","choice-mark"));
   button.onclick=()=>{
-   if(verified)return;
-   chosen=i;
-   buttons.forEach(b=>b.classList.remove("selected"));button.classList.add("selected");
+   if(verified||!current())return;
+   chosen=i;buttons.forEach(b=>b.classList.remove("selected"));button.classList.add("selected");
   };
   return button;
  });
  buttons.forEach(b=>answers.append(b));
  const check=make("button","primary","Перевірити відповідь");
  check.onclick=()=>{
-  if(verified)return;
+  if(verified||!current())return;
   if(chosen<0){feedback.hidden=false;feedback.textContent="Спочатку вибери відповідь.";return}
   buttons[q.correct].classList.add("correct");
-  buttons[chosen].classList.add(chosen===q.correct?"correct":"wrong");
+  buttons[q.correct].querySelector(".choice-mark").textContent="✓";
+  if(chosen!==q.correct){
+   buttons[chosen].classList.add("wrong");
+   buttons[chosen].querySelector(".choice-mark").textContent="✕";
+  }
   buttons.forEach(b=>b.disabled=true);
   check.disabled=true;
-  acceptAnswer((chosen===q.correct?"Правильно! ":"Не зовсім. ")+(q.explanation||""),chosen===q.correct);
+  record({status:chosen===q.correct?"correct":"wrong",userAnswer:q.options[chosen],
+   correctAnswer:q.options[q.correct],explanation:q.explanation||""},
+   (chosen===q.correct?"✓ Правильно! ":"✕ Ще ні. Правильна відповідь: "+q.options[q.correct]+". ")+
+    (q.explanation||"Перечитай відповідний уривок підручника."));
  };
  card.append(answers,check,skipOne,feedback);
 }
+function globalLessonText(){
+ if(quizState?.mode==="review")return quizState.sourceText||current?.text||"";
+ return current?.text?.slice(0,14700)||"";
+}
 function finishQuiz(mode){
- const lesson=lessons[lessonIndex];
+ const state=quizState;
+ if(!state)return;
+ const lesson=lessons[lessonIndex],results=state.results||[];
+ const score=results.filter(r=>r?.status==="correct").length;
+ const hasSkipped=results.some(r=>r?.status==="skipped");
+ $("quiz").hidden=true;
  if(mode==="point"){
-  const key=lesson.id+":"+(pointIndex+1);
-  if(quizState?.skipped){skipped.add(key);toStore(SKIPPED,[...skipped]);}
-  else{skipped.delete(key);toStore(SKIPPED,[...skipped]);completed.add(key);toStore(DONE,[...completed]);}
-  $("quiz").hidden=true;showCompletion(false);
-  progress();return;
+  const key=pointId();
+  pointAttempts[key]={score,total:state.questions.length,results:results.slice(),
+    questions:state.questions,at:Date.now()};
+  toStore(ATTEMPTS,pointAttempts);
+  if(hasSkipped){completed.delete(key);skipped.add(key)}
+  else{skipped.delete(key);completed.add(key)}
+  toStore(DONE,[...completed]);toStore(SKIPPED,[...skipped]);
+  showCompletion(false);progress();updateRestartButton();
+  return;
  }
- if(!quizState?.skipped){reviews.add(lesson.id);toStore(REVIEW_DONE,[...reviews]);}
- $("quiz").hidden=true;showReviewCompleted(Boolean(quizState?.skipped));
+ if(mode==="practice"){
+  const host=$("finished");host.replaceChildren();host.hidden=false;
+  host.append(make("span","finish-badge","ПОВТОРЕННЯ ЗАВЕРШЕНО"),
+   make("h2",null,"Тренування завершено"),
+   make("div","score-big",score+" із "+state.questions.length),
+   make("p","small","Це тренування не змінює результат основної перевірки."));
+  const back=make("button","primary","До результату пункту");
+  back.onclick=()=>showCompletion(true);
+  host.append(back);go(host);return;
+ }
+ if(!hasSkipped){reviews.add(lesson.id);toStore(REVIEW_DONE,[...reviews])}
+ showReviewCompleted(hasSkipped,score,state.questions.length);
+}
+function addMistakeReview(host,attempt){
+ const box=make("div","review-errors");box.hidden=true;
+ box.append(make("h3",null,"Розбір запитань"));
+ const results=attempt?.results||[];
+ let misses=0;
+ results.forEach((r,i)=>{
+  if(!r||r.status==="correct")return;
+  misses++;
+  const item=make("div","review-item");
+  item.append(make("strong",null,(i+1)+". "+r.question),
+    make("p",null,"Твоя відповідь: "+(r.status==="skipped"?"пропущено":r.userAnswer||"без відповіді")));
+  if(r.correctAnswer)item.append(make("p",null,"Орієнтовна правильна відповідь: "+r.correctAnswer));
+  if(r.explanation)item.append(make("p",null,"Пояснення: "+r.explanation));
+  if(r.status==="ungraded")item.append(make("p",null,"ШІ не зміг підтвердити правильність відповіді."));
+  box.append(item);
+ });
+ if(!misses)box.append(make("p",null,"Помилок немає!"));
+ host.append(box);return box;
 }
 function showCompletion(already){
- $("readEnd").hidden=true;
+ $("readEnd").hidden=true;$("review").hidden=true;
  const host=$("finished");host.hidden=false;host.replaceChildren();
- const lesson=lessons[lessonIndex],key=lesson.id+":"+(pointIndex+1);
+ const lesson=lessons[lessonIndex],key=pointId();
  const incomplete=skipped.has(key)&&!completed.has(key);
- host.append(make("div","doneIcon",incomplete?"↪":"✓"),
-  make("h2",null,incomplete?"Перевірку пропущено":"Пункт завершено!"),
-  make("p","small",incomplete
-   ?"Можеш перейти далі без відповіді на запитання. Перевірку можна пройти пізніше."
-   :already?"Результат збережено.":"Відповіді перевірені. Ти можеш продовжити читання."));
- const actions=make("div","actions");
- if(incomplete){
-  const retry=make("button","secondary","Пройти перевірку пізніше");
-  retry.onclick=startQuiz;actions.append(retry);
+ const attempt=pointAttempts[key]||null;
+ host.append(make("span","finish-badge",incomplete?"ПЕРЕВІРКУ ПРОПУЩЕНО":"ПУНКТ ЗАВЕРШЕНО"),
+  make("h2",null,incomplete?"Перевірку можна пройти пізніше":"Пункт завершено!"));
+ if(attempt){
+  host.append(make("div","score-big",attempt.score+" із "+attempt.total));
+  const misses=attempt.results.filter(r=>r.status!=="correct");
+  let hint=misses.length
+   ?"Потрібно повторити: "+misses.slice(0,2).map(r=>r.question).join("; ")+"."
+   :"Усі відповіді правильні!";
+  if(incomplete)hint="Перевірка містить пропущені запитання. "+hint;
+  host.append(make("p","repeat-note",hint));
+ } else {
+  host.append(make("p","small","Можеш перейти далі або пройти всі п’ять запитань."));
  }
+ const actions=make("div","actions");
+ if(attempt){
+  const mistakes=addMistakeReview(host,attempt);
+  const reviewButton=make("button","secondary","Переглянути помилки");
+  reviewButton.onclick=()=>{
+   mistakes.hidden=!mistakes.hidden;
+   reviewButton.textContent=mistakes.hidden?"Переглянути помилки":"Сховати помилки";
+   if(!mistakes.hidden)go(mistakes);
+  };
+  actions.append(reviewButton);
+  const indices=attempt.results.map((r,i)=>r.status==="correct"?-1:i).filter(i=>i>=0);
+  if(indices.length&&indices.every(i=>attempt.questions?.[i])){
+   const practice=make("button","secondary","Повторити складне");
+   practice.onclick=()=>{
+    quizState={questions:indices.map(i=>attempt.questions[i]),index:0,mode:"practice",
+     done:0,results:[],loadVersion:loadToken};
+    host.hidden=true;$("paragraphSummary").hidden=true;$("quiz").hidden=false;
+    showQuestion();go($("quiz"));
+   };
+   actions.append(practice);
+  }
+ }
+ const again=make("button","secondary","↻ Пройти пункт ще раз");
+ again.onclick=startQuiz;actions.append(again);
  const length=(points[lesson.id]||[]).length;
  if(pointIndex===length-1){
-  const test=make("button","secondary","📝 Самостійна робота");test.onclick=startParagraphReview;
-  const retell=make("button","secondary","✍️ Переказати параграф");retell.onclick=openRetelling;
+  const test=make("button","secondary","📝 Самостійна робота");
+  test.onclick=startParagraphReview;
+  const retell=make("button","secondary","✍️ Переказати параграф");
+  retell.onclick=openRetelling;
   actions.append(test,retell);
  }
- const goNext=make("button","primary",pointIndex<length-1?"Наступний пункт →":
+ const forward=make("button","primary",pointIndex<length-1?"Наступний пункт →":
   lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓");
- goNext.onclick=()=>nextPoint();
- actions.append(goNext);host.append(actions);
+ forward.onclick=()=>nextPoint();actions.append(forward);
+ host.append(actions);
+ updateRestartButton();
+ if(pointIndex===length-1)showParagraphSummary();
+ else $("paragraphSummary").hidden=true;
  if(!already)go(host);
 }
 function nextPoint(){
