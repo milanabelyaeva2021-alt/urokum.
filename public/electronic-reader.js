@@ -83,31 +83,29 @@ async function showParagraphSummary(){
  if(pointIndex!==length-1){host.hidden=true;return}
  const version=loadToken,lessonAtStart=lessonIndex;
  host.hidden=false;host.replaceChildren();
- host.append(make("h2",null,"📚 Короткий конспект параграфа"),
-  make("p","small","Готую короткий конспект за матеріалом підручника…"));
+ const expand=make("details","synopsis-toggle");
+ expand.append(make("summary",null,"📚 Короткий конспект параграфа"));
+ const body=make("div","synopsis-content");
+ body.append(make("p","small","Готую найважливіше з параграфа…"));
+ expand.append(body);host.append(expand);
  try{
   const items=await shortParagraphSummary(lessonAtStart);
   if(version!==loadToken||lessonAtStart!==lessonIndex)return;
-  host.replaceChildren();host.append(make("h2",null,"📚 Короткий конспект параграфа"));
-  // A synopsis reads as connected prose, not as a numbered list.
-  const paragraphs=[];
-  if(items.length){
-   const midpoint=items.length>3?Math.ceil(items.length/2):items.length;
-   paragraphs.push(items.slice(0,midpoint).join(" "));
-   if(midpoint<items.length)paragraphs.push(items.slice(midpoint).join(" "));
+  body.replaceChildren();
+  if(!items.length){
+   body.append(make("p","small","Для цього параграфа ще немає готового конспекту."));
+   return;
   }
-  for(const paragraph of paragraphs)host.append(make("p","summary-prose",paragraph));
-  if(!PREPARED_SUMMARIES[lesson.id]){
-   host.append(make("p","summary-footnote","Конспект автоматично складений з уривків підручника. Найважливіші факти варто звірити з оригінальним текстом."));
-  }
-  if(!items.length)host.append(make("p","small","Для цього параграфа поки немає готового конспекту."));
+  const midpoint=items.length>3?Math.ceil(items.length/2):items.length;
+  body.append(make("p","summary-prose",items.slice(0,midpoint).join(" ")));
+  if(midpoint<items.length)body.append(make("p","summary-prose",items.slice(midpoint).join(" ")));
+  if(!PREPARED_SUMMARIES[lesson.id])
+   body.append(make("p","summary-footnote","Тези автоматично вибрано з тексту. Перевіряй важливі дати й факти за підручником."));
  }catch(error){
   if(version!==loadToken)return;
-  host.replaceChildren();host.append(make("h2",null,"📚 Короткий конспект"),
-   make("p","small","Не вдалося завантажити тези параграфа."));
+  body.replaceChildren(make("p","small","Не вдалося відкрити конспект."));
  }
 }
-
 const safeText=value=>String(value||"").replace(/[\u00ad\u200b\ufeff]/g,"").replace(/\s+/g," ").trim();
 function explainMarkup(root,text){
  root.replaceChildren();
