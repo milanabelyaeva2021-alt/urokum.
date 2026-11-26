@@ -189,6 +189,14 @@ mark.ebook-source-highlight{transition:background-color .2s}
 .synopsis-content .summary-footnote{font-size:11px;color:var(--muted)}
 .source-back-link a.secondary{display:inline-flex;align-items:center;text-decoration:none;min-height:42px;font-weight:750}
 @media(max-width:650px){.completion{padding:18px}.completion-main-actions button{flex:1 1 100%}.synopsis-toggle{padding:14px 16px}}
+
+/* Transfer is opt-in; no account or server-side personal data is required. */
+.progress-transfer{margin:15px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.progress-transfer>summary{cursor:pointer;font-size:13px;font-weight:750;color:var(--green)}
+.progress-transfer .small{margin:9px 0;color:var(--muted);line-height:1.5}
+.progress-transfer-actions{display:flex;gap:8px;flex-wrap:wrap}
+.progress-transfer-actions button{font-size:12px;min-height:37px;padding:7px 10px;flex:1 1 130px}
+@media(max-width:650px){.ebookText p{hyphens:manual;-webkit-hyphens:manual;overflow-wrap:break-word;word-break:normal}.ebook-bullets,.ebook-vocab dd,.ebook-source blockquote,.ebook-fact p{hyphens:manual;-webkit-hyphens:manual}}
 </style>
 </head>
 <body>
@@ -213,6 +221,16 @@ mark.ebook-source-highlight{transition:background-color .2s}
 </div>
 <div id="tocPanel" hidden><nav class="tocSheet" aria-label="Зміст підручника">
  <div class="tocHead"><h2>Зміст підручника</h2><button class="iconBtn" id="closeToc">Закрити ✕</button></div>
+ <details class="progress-transfer">
+  <summary>☁ Перенести прогрес між пристроями</summary>
+  <p class="small">Збережи свій прогрес у файл, а на іншому пристрої обери «Відновити». Файл містить твої результати навчання — не передавай його стороннім.</p>
+  <div class="progress-transfer-actions">
+   <button class="secondary" id="exportProgress" type="button">Зберегти прогрес</button>
+   <button class="secondary" id="importProgress" type="button">Відновити з файлу</button>
+   <input id="importProgressFile" type="file" accept="application/json,.json" hidden />
+  </div>
+  <p id="progressTransferStatus" class="small" role="status"></p>
+ </details>
  <div id="tocList"></div>
 </nav></div>
 <main>
