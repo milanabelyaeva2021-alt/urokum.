@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Читай і перевіряй · Урокум</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400..700&family=Onest:wght@400..800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#edf2ef;--card:#fff;--ink:#182923;--muted:#5b6c63;--line:#d0dcd4;--green:#19674e;--greenSoft:#ddede5;--yellow:#f0bd21;--warn:#8b4b19;--bad:#a53235;--badBg:#fceaea;--read:"Literata",Georgia,serif;--ui:"Onest",Arial,sans-serif}
+:root[data-theme="dark"]{--bg:#111c17;--card:#192820;--ink:#e9f4ee;--muted:#abc2b3;--line:#30473a;--green:#83d4b1;--greenSoft:#233d30;--yellow:#d9a723;--warn:#f6cb7d;--bad:#ff9898;--badBg:#392323;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:130px}body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--ui);padding:0 18px 100px}
+button,a,textarea{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}a{color:var(--green)}:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+.top{max-width:1100px;margin:auto;min-height:78px;display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}.brand{font-size:23px;font-weight:800;letter-spacing:-1px;text-decoration:none;color:var(--ink)}.brand b{color:var(--green)}.top-actions{display:flex;gap:8px;align-items:center}.iconBtn{background:var(--card);color:var(--ink);border:1px solid var(--line);padding:9px 13px;border-radius:12px;font-weight:650;font-size:13px;min-height:42px}
+.progressStrip{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0 12px}.progressInner{max-width:760px;margin:auto}.progressTop{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);font-weight:650;margin-bottom:9px}.progressBar{height:7px;background:var(--line);border-radius:6px;overflow:hidden}.progressBar i{display:block;height:100%;width:0;background:var(--green);border-radius:6px;transition:width .25s}
+main{max-width:760px;margin:36px auto 0}
+.eyebrow{margin:0 0 8px;font-size:12px;letter-spacing:.1em;font-weight:800;text-transform:uppercase;color:var(--green)}
+h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;margin:0 0 14px;font-weight:800}
+.subtitle{color:var(--muted);margin:0 0 22px;font-size:15px}
+.reader{padding:0 0 30px}.pointLabel{display:flex;align-items:center;gap:12px;margin:18px 0 22px;color:var(--green);font-weight:800;font-size:14px}.pointNumber{display:grid;place-items:center;width:34px;height:34px;background:var(--yellow);border-radius:10px;color:#2a2608;font-weight:800}
+.ebookText p{font:400 clamp(17px,1.7vw,20px)/1.85 var(--read);margin:0 0 1.25em;overflow-wrap:break-word;hyphens:auto}
+.ebookText p:first-child:first-letter{font-weight:700}
+.ebookText::selection,.ebookText p::selection{background:#b2e3cf}
+.readEnd{margin:18px 0 8px;padding-top:16px;border-top:2px solid var(--line)}
+.hint{color:var(--muted);font-size:13px;margin:0 0 12px}
+.primary{background:var(--green);color:var(--bg);font-weight:800;border:0;border-radius:10px;padding:13px 18px;min-height:48px}
+.secondary{background:var(--card);color:var(--ink);font-weight:650;border:1px solid var(--line);border-radius:10px;padding:12px 15px;min-height:45px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin:13px 0}.actions>*{flex:1 1 180px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin:22px 0;box-shadow:0 14px 34px -30px #13251a}
+.card h2{margin:0 0 10px;font-size:22px;line-height:1.3}.card p{margin:0 0 12px}
+.stopCard:before{content:"";display:block;height:7px;border-radius:10px;background:repeating-linear-gradient(135deg,var(--yellow) 0 12px,#323025 12px 20px);margin:-22px -22px 18px}
+.pill{display:inline-block;padding:4px 11px;border-radius:20px;background:var(--yellow);color:#332c0b;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.qNo{color:var(--muted);font-size:12px;font-weight:700}
+.questionText{font-size:20px;font-weight:750;line-height:1.45;margin:14px 0 20px}
+.answers{display:grid;gap:9px}.choice{width:100%;text-align:left;display:flex;gap:11px;align-items:flex-start;padding:13px 14px;background:var(--bg);border:1px solid var(--line);border-radius:10px;line-height:1.5}.choice b{width:23px;flex:none;color:var(--green)}.choice.selected{outline:2px solid var(--green);outline-offset:0}.choice.correct{border-color:var(--green);background:var(--greenSoft)}.choice.wrong{border-color:var(--bad);background:var(--badBg)}.choice:disabled{opacity:1}
+.quizFeedback{color:var(--muted);padding:13px 0 5px;font-size:14px;line-height:1.6}
+.written{width:100%;min-height:136px;padding:14px 15px;border:1px solid var(--line);border-radius:11px;resize:vertical;background:var(--bg);color:var(--ink);line-height:1.6;margin-bottom:10px}
+.reviewText{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--greenSoft);border-radius:10px;padding:14px;line-height:1.6;margin:14px 0}
+.ask{border-top:1px solid var(--line);margin-top:30px;padding-top:15px}.ask summary{font-weight:750;cursor:pointer;color:var(--green)}.ask textarea{margin-top:13px}.ask p{color:var(--muted);font-size:13px}
+.completion{border-color:var(--green);text-align:center}.completion .doneIcon{font-size:34px;color:var(--green)}.completion h2{font-size:24px}.small{font-size:13px;color:var(--muted)}
+#tocPanel{position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end;background:#14231b87}
+#tocPanel[hidden]{display:none}
+.tocSheet{height:100%;width:min(100%,400px);overflow-y:auto;background:var(--card);padding:22px 19px;box-shadow:-10px 0 30px #0002}
+.tocHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.tocHead h2{margin:0;font-size:22px}.tocChapter{font-size:13px;font-weight:800;color:var(--green);padding:13px 8px 8px}.tocItem{display:block;width:100%;border:0;border-radius:9px;background:transparent;color:var(--ink);padding:10px 11px;text-align:left;font-size:14px;line-height:1.5}.tocItem:hover,.tocItem.current{background:var(--greenSoft)}
+#loading{margin:42px 0;color:var(--muted);line-height:1.7}
+#loading[hidden],#bookShell[hidden],#quiz[hidden],#finished[hidden],#review[hidden]{display:none!important}
+#quiz .buttons{margin-top:16px}
+@media(max-width:650px){body{padding:0 15px 80px}.top{min-height:70px}main{margin-top:23px}.card{padding:18px}.stopCard:before{margin:-18px -18px 18px}.top-actions .iconBtn{padding:8px 10px}.ebookText p{line-height:1.75}.progressTop{font-size:11px}}
+</style>
+</head>
+<body>
+<header class="top">
+ <a href="/" class="brand">Уро<b>кум</b></a>
+ <div class="top-actions">
+  <button class="iconBtn" id="contentsBtn" type="button">☷ Зміст</button>
+  <button class="iconBtn" id="themeBtn" type="button" aria-label="Змінити тему">☾</button>
+  <a href="/" class="iconBtn" style="text-decoration:none">Головна</a>
+ </div>
+</header>
+<div class="progressStrip">
+ <div class="progressInner">
+  <div class="progressTop"><span id="progressName">Історія України · 11 клас</span><span id="progressStep"></span></div>
+  <div class="progressBar" aria-label="Прогрес пунктів параграфа"><i id="progressFill"></i></div>
+ </div>
+</div>
+<div id="tocPanel" hidden><nav class="tocSheet" aria-label="Зміст підручника">
+ <div class="tocHead"><h2>Зміст підручника</h2><button class="iconBtn" id="closeToc">Закрити ✕</button></div>
+ <div id="tocList"></div>
+</nav></div>
+<main>
+ <div id="loading">Готую електронний текст підручника…</div>
+ <div id="bookShell" hidden>
+  <div class="eyebrow" id="lessonEyebrow">Історія України · 11 клас</div>
+  <h1 id="lessonTitle">Електронний підручник</h1>
+  <p class="subtitle" id="lessonSubtitle"></p>
+  <article class="reader">
+   <div class="pointLabel"><span class="pointNumber" id="pointNumber">1</span><span id="pointLabel">Пункт 1</span></div>
+   <div class="ebookText" id="ebookText"></div>
+   <div class="readEnd" id="readEnd">
+    <p class="hint">Коли дочитаєш пункт, перевір, що ти зрозумів(ла).</p>
+    <button class="primary" id="beginQuiz">Я прочитав(ла), перевірити</button>
+   </div>
+  </article>
+  <section id="quiz" class="card stopCard" hidden aria-live="polite"></section>
+  <section id="finished" class="card completion" hidden></section>
+  <section id="review" class="card" hidden></section>
+  <details class="ask" id="askPanel">
+   <summary>💬 Запитати ШІ про прочитане</summary>
+   <p>Запитай своїми словами про події, поняття чи причини.</p>
+   <textarea id="studentQuestion" class="written" maxlength="500" rows="3" placeholder="Що саме хочеш зрозуміти?"></textarea>
+   <button class="primary" id="sendQuestion">Запитати ШІ</button>
+   <div id="answerFromAI" class="reviewText" hidden></div>
+  </details>
+ </div>
+</main>
+<script type="module" src="/electronic-reader.js"></script>
+</body>
+</html>
