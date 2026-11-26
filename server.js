@@ -597,7 +597,8 @@ app.post("/api/tutor", async (req, res) => {
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
   if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY && !process.env.OPENROUTER_API_KEY && !(process.env.ALLOW_PAID_AI==="true" && process.env.OPENAI_API_KEY)) return res.status(503).json({error:"Безкоштовний ШІ зараз не налаштований. Читання та пропуск перевірки доступні."});
   const prompt = task === "check-open"
-    ? "Ти доброзичливий учитель історії. Перевір відповідь учня за матеріалом пункту підручника. Поясни, що правильно, що неточно, і що ще варто згадати. Не вимагай дослівного збігу з прикладом відповіді. Не вигадуй фактів. Дай короткий відгук українською (3–5 речень). Запитання: "+question.trim().slice(0,500)+"\\nВідповідь учня: "+studentAnswer.trim().slice(0,1800)+"\\nОрієнтовна відповідь: "+referenceAnswer.trim().slice(0,2000)
+    ? 'Ти уважний учитель історії. Перевір зміст письмової відповіді учня за матеріалом підручника. Враховуй синоніми, не вимагай дослівного збігу. Статус passed=true дозволений ЛИШЕ якщо відповідь фактично правильна і відповідає на поставлене запитання; якщо відповідь неповна, хибна чи не по темі — passed=false. Поверни ВИКЛЮЧНО валідний JSON без markdown: {"passed":true,"feedback":"Коротке пояснення українською: що добре і що варто уточнити (2–4 речення)."} Запитання: '+question.trim().slice(0,500)+'\\nВідповідь учня: '+studentAnswer.trim().slice(0,1800)+'\\nОрієнтовна відповідь: '+referenceAnswer.trim().slice(0,2000)
+
     : task === "paragraph-review"
     ? 'Зроби підсумкову САМОСТІЙНУ РОБОТУ з рівно 6 різних тестових запитань українською за всім параграфом. Два на факти, два на розуміння причин і наслідків, два на узагальнення. Тільки відомості з тексту. Поверни виключно JSON {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. Обов’язково 6 запитань, 4 відповіді у кожному, індекс correct 0..3.'
     : task === "assess-retelling"
@@ -706,6 +707,16 @@ app.post("/api/tutor", async (req, res) => {
         console.warn("AI quiz JSON invalid",error.message);
         return res.status(502).json({error:"ШІ не повернув потрібну кількість коректних запитань. Спробуй ще раз."});
       }
+    }
+    if(task==="check-open"){
+      const cleaned=output.replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/i,"").trim();
+      try{
+        const result=JSON.parse(cleaned);
+        if(typeof result.passed==="boolean" && typeof result.feedback==="string" && result.feedback.trim()){
+          return res.json({passed:result.passed,answer:result.feedback.trim()});
+        }
+      }catch{/* The AI may answer in prose instead of JSON. */}
+      return res.json({passed:null,answer:output||"Відповідь збережена, але перевірку ШІ не вдалося завершити."});
     }
     res.json({ answer: output || "Не вдалося отримати відповідь." });
   } catch { res.status(502).json({ error: "Не вдалося зв'язатися із сервісом ШІ." }); }
