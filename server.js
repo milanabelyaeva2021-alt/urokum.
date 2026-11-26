@@ -224,7 +224,7 @@ async function getHistoryEbookPDF(){
  return historyEbookPdfPromise;
 }
 function ebookClean(value){
- return String(value||"").replace(/[\u00ad\ufeff]/g,"")
+ return String(value||"").replace(/[\u00ad\ufeff]/g,"").replace(/[\u0000-\u001f]/g,"")
    .replace(/\s+/g," ").trim();
 }
 function getHistoryEbookLines(page,items,from,to,pageNumber){
@@ -271,30 +271,115 @@ function getHistoryEbookLines(page,items,from,to,pageNumber){
 }
 function historyEbookParagraphs(rows){
  const result=[];let current="",last=null,minX=null;
- const finish=()=>{const text=ebookClean(current);if(text.length>=8)result.push(text);current="";};
+ const finish=()=>{
+  const text=ebookClean(current);
+  if(text.length>=8)result.push(text);
+  current="";
+ };
  for(const row of rows){
-  if(row.page!==last?.page){minX=null}
+  const newPage=row.page!==last?.page;
+  if(newPage)minX=null;
   minX=minX==null?row.x:Math.min(minX,row.x);
+  const endsSentence=/[.!?;»)]$/.test(current.trim());
   const startsNew=last&&current.length>60&&(
-    row.page!==last.page ||
-    row.y<last.y-5 ||
-    row.y-last.y>19 ||
-    (row.x-minX>17 && /[.!?;»)]$/.test(current.trim()))
+    (newPage&&endsSentence)||
+    (!newPage&&row.y-last.y>19)||
+    (!newPage&&row.x-minX>17&&endsSentence)
   );
   if(startsNew)finish();
   const next=ebookClean(row.str);
-  if(!next){last=row;continue;}
+  if(!next){last=row;continue}
   if(current){
-   // Only join hyphenated words when the next line begins lowercase.
-   if(/[-\u2010]$/.test(current)&&/^[а-яіїєґ]/u.test(next)){
+   if(/[-\u2010]$/.test(current)&&/^[а-яіїєґ]/u.test(next))
     current=current.replace(/[-\u2010]$/u,"")+next;
-   } else current+=" "+next;
+   else current+=" "+next;
   }else current=next;
   last=row;
-  if(current.length>850&&/[.!?]$/.test(current.trim()))finish();
+  if(current.length>850&&endsSentence)finish();
  }
  finish();
  return result;
+}
+// Try to recover printed side-column definitions rather than placing their
+// small-font fragments unpredictably inside the main narrative.
+function findHistoryGlossary(page,items,start,end,n){
+ const w=page.view[2],h=page.view[3];
+ const terms=[];
+ const rows=[];
+ (items||[]).forEach((item,seq)=>{
+  const x=Number(item.transform?.[4]),y=h-Number(item.transform?.[5]);
+  const size=Math.abs(Number(item.height||0));
+  if(![x,y,size].every(Number.isFinite)||x<30||x>w-24||
+    y<51||y>h-38||size<8.2||size>9.15||!ebookClean(item.str))return;
+  if(n===start.page&&y<start.y-9)return;
+  if(end&&n===end.page&&y>=end.y-5)return;
+  const column=x<240?0:1;
+  let row=rows.find(v=>v.col===column&&Math.abs(v.y-y)<2.1);
+  if(!row){row={col:column,y,parts:[]};rows.push(row)}
+  row.parts.push({x,str:item.str,seq});
+ });
+ rows.sort((a,b)=>a.col-b.col||a.y-b.y);
+ const active={0:null,1:null};
+ let lastY={0:null,1:null};
+ for(const row of rows){
+  row.parts.sort((a,b)=>a.x-b.x);
+  const line=ebookClean(row.parts.map(x=>x.str).join(""));
+  if(!line)continue;
+  const match=line.match(/^(.{3,70}?)\s*[—–]\s+(.{7,})$/u);
+  const looksLikeTerm=match&&match[1].length<=55&&!/[.!?]$/.test(match[1])&&
+    !/^Із |^Зі |^На |^За /u.test(match[1]);
+  const col=row.col;
+  if(looksLikeTerm){
+    const entry={term:match[1].trim(),definition:match[2].trim()};
+    terms.push(entry);active[col]=entry;
+    lastY[col]=row.y;continue;
+  }
+  if(active[col]&&lastY[col]!=null&&row.y-lastY[col]<=15.5 &&
+    line.length<145&&!/^[•❖\u0017]/u.test(line)){
+    const prev=active[col].definition;
+    active[col].definition=/[-\u2010]$/.test(prev)&&/^[а-яіїєґ]/u.test(line)
+      ?prev.replace(/[-\u2010]$/u,"")+line:prev+" "+line;
+    lastY[col]=row.y;
+  } else {active[col]=null;lastY[col]=null}
+ }
+ return terms.filter(x=>x.definition.length>=18);
+}
+function structuredHistoryBlocks(paragraphs,point,glossary){
+ const blocks=[];
+ const work=paragraphs.slice();
+ if(work.length){
+  const first=work[0];
+  const match=first.match(/^\s*\d{1,2}\s+(.{4,160}?[.!?])\s+([А-ЯІЇЄҐ].{12,})/u);
+  if(match){
+   blocks.push({type:"heading",text:point+". "+match[1].trim()});
+   work[0]=match[2];
+  }else if(/^\s*\d{1,2}\s+[А-ЯІЇЄҐ]/u.test(first)){
+   const split=first.search(/[.!?]\s+[А-ЯІЇЄҐ]/u);
+   if(split>=0){
+     blocks.push({type:"heading",text:first.slice(0,split+1).trim()});
+     work[0]=first.slice(split+2).trim();
+   }else blocks.push({type:"heading",text:"Пункт "+point});
+  }else blocks.push({type:"heading",text:"Пункт "+point});
+ }
+ for(const paragraph of work){
+  if(!paragraph?.trim())continue;
+  const closing=paragraph.match(/^Висновки[.:\s]+(.+)/isu);
+  if(closing){blocks.push({type:"conclusion",title:"Висновки",text:closing[1].trim()});continue}
+  if(/^[•●▪\u0017]\s*/u.test(paragraph)){
+   const last=blocks[blocks.length-1];
+   if(last?.type==="list")last.items.push(paragraph.replace(/^[•●▪\u0017]\s*/u,""));
+   else blocks.push({type:"list",items:[paragraph.replace(/^[•●▪\u0017]\s*/u,"")]});
+   continue;
+  }
+  blocks.push({type:"text",text:paragraph});
+ }
+ const distinct=new Map();
+ for(const term of glossary){
+  const key=term.term.toLocaleLowerCase("uk");
+  if(!distinct.has(key))distinct.set(key,term);
+ }
+ if(distinct.size)blocks.push({type:"terms",title:"Словничок до пункту",entries:[...distinct.values()]});
+ return blocks;
 }
 async function getHistoryEbookPoint(paraIndex,pointIndex){
  const lesson=historyParagraphs[paraIndex];
@@ -340,17 +425,18 @@ async function getHistoryEbookPoint(paraIndex,pointIndex){
    const document=await getHistoryEbookPDF();
    const start=points[pointIndex],next=points[pointIndex+1]||null;
    const finalPage=next?next.page:lesson.endPage;
-   const rows=[];
+   const rows=[],glossary=[];
    for(let n=start.page;n<=finalPage;n++){
     const page=await document.getPage(n),content=await page.getTextContent();
-    for(const line of getHistoryEbookLines(page,content.items,start,next,n))
-      rows.push({...line,page:n});
+    for(const line of getHistoryEbookLines(page,content.items,start,next,n))rows.push({...line,page:n});
+    glossary.push(...findHistoryGlossary(page,content.items,start,next,n));
    }
    const paragraphs=historyEbookParagraphs(rows);
    if(!paragraphs.length)throw new Error("No electronic text detected");
-   const text=paragraphs.join("\n\n");
+   const blocks=structuredHistoryBlocks(paragraphs,pointIndex+1,glossary);
+   const text=blocks.map(b=>b.type==="terms"?b.entries.map(e=>e.term+": "+e.definition).join("\n"):b.text||"").filter(Boolean).join("\n\n");
    return {id:lesson.id,title:lesson.title,point:pointIndex+1,pointCount:points.length,
-     pages:[start.page,finalPage],paragraphs,text};
+     pages:[start.page,finalPage],paragraphs,blocks,text};
   })().catch(error=>{historyEbookTextCache.delete(cacheKey);throw error});
   historyEbookTextCache.set(cacheKey,promise);
  }
