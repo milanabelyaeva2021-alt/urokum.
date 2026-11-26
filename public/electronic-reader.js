@@ -368,11 +368,11 @@ async function startQuiz(){
  if(!current)return;
  const cacheKey=lessonQuizKey(),cached=locallySavedQuestions[cacheKey];
  if(Array.isArray(cached)&&cached.length===5&&cached.every((q,i)=>validQuestion(q,i,"point"))){
-  $("readEnd").hidden=true;$("finished").hidden=true;$("quiz").hidden=false;
-  quizState={questions:cached,index:0,mode:"point",done:0};
+  $("readEnd").hidden=true;$("finished").hidden=true;$("paragraphSummary").hidden=true;$("quiz").hidden=false;
+  quizState={questions:cached,index:0,mode:"point",done:0,results:[],loadVersion:loadToken};
   showQuestion();go($("quiz"));return;
  }
- $("readEnd").hidden=true;$("finished").hidden=true;
+ $("readEnd").hidden=true;$("finished").hidden=true;$("paragraphSummary").hidden=true;
  const card=$("quiz");card.hidden=false;card.replaceChildren();
  card.append(make("span","pill","Навчальна зупинка"),make("h2",null,"Перевіримо, що ти зрозумів(ла)"));
  const status=make("p","small","ШІ готує 5 запитань: 3 з варіантами та 2 письмові.");
@@ -385,7 +385,7 @@ async function startQuiz(){
   if(!Array.isArray(response.questions)||response.questions.length!==5||
      !response.questions.every((q,i)=>validQuestion(q,i,"point")))
    throw Error("Отримано некоректний формат запитань");
-  quizState={questions:response.questions,index:0,mode:"point",done:0};
+  quizState={questions:response.questions,index:0,mode:"point",done:0,results:[],loadVersion:loadToken};
   locallySavedQuestions[cacheKey]=response.questions;
   const entries=Object.entries(locallySavedQuestions);
   if(entries.length>140)locallySavedQuestions=Object.fromEntries(entries.slice(-140));
@@ -659,7 +659,7 @@ async function startParagraphReview(){
   if(!Array.isArray(data.questions)||data.questions.length!==6||
      !data.questions.every((q,i)=>validQuestion(q,i,"review")))
    throw Error("Некоректні запитання");
-  quizState={questions:data.questions,index:0,mode:"review",done:0};
+  quizState={questions:data.questions,index:0,mode:"review",done:0,results:[],loadVersion:loadToken,sourceText:text};
   host.hidden=true;$("quiz").hidden=false;showQuestion();go($("quiz"));
  }catch(error){
   if(version!==loadToken)return;
@@ -669,10 +669,11 @@ async function startParagraphReview(){
   host.append(back);
  }
 }
-function showReviewCompleted(partial=false){
+function showReviewCompleted(partial=false,score=null,total=6){
  const host=$("review");host.hidden=false;host.replaceChildren();
- host.append(make("h2",null,partial?"Самостійна робота завершена з пропусками":"Самостійну роботу завершено!"),
-  make("p","small",partial?"Пропущені запитання не зараховуються як правильні. Самостійну можна пройти ще раз.":"Результат збережено. Можеш переказати матеріал або перейти до наступного параграфа."));
+ host.append(make("h2",null,partial?"Самостійна робота завершена з пропусками":"Самостійну роботу завершено!"));
+ if(typeof score==="number")host.append(make("div","score-big",score+" із "+total));
+ host.append(make("p","small",partial?"Пропущені запитання не зараховуються як правильні. Самостійну можна пройти ще раз.":"Результат збережено. Можеш переказати матеріал або перейти до наступного параграфа."));
  const actions=make("div","actions");
  const retell=make("button","secondary","Переказати параграф");
  retell.onclick=openRetelling;
