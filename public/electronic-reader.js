@@ -44,6 +44,71 @@ function restartParagraph(){
  $("paragraphSummary").hidden=true;
  loadPoint(lessonIndex,0);
 }
+const PREPARED_SUMMARIES={
+ p1:[
+  "Другий період Новітньої історії України охоплює 1945 р. — початок XXI ст.",
+  "Після Другої світової війни світ розділився на два блоки, розгорнулося протистояння США та СРСР.",
+  "24 серпня 1991 р. Україна проголосила незалежність; почалося становлення незалежної держави.",
+  "Друга світова війна завдала Україні величезних людських та матеріальних втрат.",
+  "За переписом 1959 р. українці становили 76,8 % населення УРСР."
+ ],
+ p2:[
+  "Після Другої світової війни кордони УРСР визначалися домовленостями з Польщею, Чехословаччиною та Румунією.",
+  "Переселення населення між УРСР і Польщею часто було примусовим.",
+  "У 1947 р. польська влада здійснила операцію «Вісла», під час якої українців депортували з їхніх етнічних земель.",
+  "У 1945 р. УРСР стала однією з країн — засновниць ООН, але її зовнішня політика залежала від СРСР."
+ ]
+};
+function firstSummarySentence(value){
+ const text=String(value||"").replace(/\s+/g," ").trim();
+ if(!text)return "";
+ const sentence=text.match(/^(.{20,220}?[.!?])(?:\s|$)/u);
+ return (sentence?sentence[1]:text.slice(0,210).replace(/\s+\S*$/,"")+"…").trim();
+}
+async function shortParagraphSummary(i){
+ const lesson=lessons[i],key=lesson.id;
+ if(summaryCache.has(key))return summaryCache.get(key);
+ if(PREPARED_SUMMARIES[key])return PREPARED_SUMMARIES[key];
+ const length=(points[key]||[]).length,items=[];
+ for(let j=0;j<length;j++){
+  const part=await fetchPoint(i,j);
+  const blocks=Array.isArray(part.blocks)?part.blocks:[];
+  const intro=blocks.find(x=>x.type==="text"&&String(x.text||"").length>50)?.text||
+    part.paragraphs?.find(x=>String(x||"").length>50)||"";
+  const sentence=firstSummarySentence(intro);
+  if(sentence)items.push(sentence);
+  if(items.length>=6)break;
+ }
+ summaryCache.set(key,items);
+ return items;
+}
+async function showParagraphSummary(){
+ const host=$("paragraphSummary"),lesson=lessons[lessonIndex];
+ if(!lesson)return;
+ const length=(points[lesson.id]||[]).length;
+ if(pointIndex!==length-1){host.hidden=true;return}
+ const version=loadToken,lessonAtStart=lessonIndex;
+ host.hidden=false;host.replaceChildren();
+ host.append(make("h2",null,"📚 Короткий конспект параграфа"),
+  make("p","small","Готую основні тези з підручника…"));
+ try{
+  const items=await shortParagraphSummary(lessonAtStart);
+  if(version!==loadToken||lessonAtStart!==lessonIndex)return;
+  host.replaceChildren();host.append(make("h2",null,"📚 Короткий конспект параграфа"));
+  const list=make("ol");
+  for(const item of items)list.append(make("li",null,item));
+  host.append(list);
+  if(!PREPARED_SUMMARIES[lesson.id]){
+   host.append(make("p","summary-footnote","Тези вибрано з тексту пунктів. Звіряй складні місця з підручником."));
+  }
+  if(!items.length)host.append(make("p","small","Для цього параграфа поки немає готових тез."));
+ }catch(error){
+  if(version!==loadToken)return;
+  host.replaceChildren();host.append(make("h2",null,"📚 Короткий конспект"),
+   make("p","small","Не вдалося завантажити тези параграфа."));
+ }
+}
+
 const safeText=value=>String(value||"").replace(/[\u00ad\u200b\ufeff]/g,"").replace(/\s+/g," ").trim();
 function explainMarkup(root,text){
  root.replaceChildren();
