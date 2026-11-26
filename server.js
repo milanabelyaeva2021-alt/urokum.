@@ -300,6 +300,39 @@ async function getHistoryEbookPoint(paraIndex,pointIndex){
  if(!lesson)throw new Error("Unknown lesson");
  const points=historyPointMap[lesson.id]||[];
  if(!points[pointIndex])throw new Error("Unknown teaching point");
+ // The introduction is editorially checked against the textbook.
+ // Its tables, glossary, historical source and chart are structured content,
+ // not rough PDF OCR or accidentally captured captions.
+ if(paraIndex===0){
+  const file=path.join(__dirname,"public","books","h11",
+    "intro-point-"+String(pointIndex+1)+".json");
+  const data=JSON.parse(await fs.readFile(file,"utf8"));
+  const paragraphs=[];
+  const textParts=[];
+  for(const block of data.blocks||[]){
+   if(block.type==="text"){
+    paragraphs.push(block.text);
+    textParts.push(block.text);
+   } else if(block.type==="heading"||block.type==="conclusion"){
+    textParts.push(block.text||"");
+   } else if(block.type==="list"){
+    textParts.push(...(block.items||[]));
+   } else if(block.type==="terms"){
+    textParts.push(...(block.entries||[]).map(x=>x.term+": "+x.definition));
+   } else if(block.type==="source"){
+    textParts.push(block.text||"");
+   } else if(block.type==="table"){
+    for(const row of block.rows||[])textParts.push(row.join(" | "));
+   } else if(block.type==="chart"){
+    textParts.push(...(block.series||[]).map(x=>x.name+": "+x.percent+"%"));
+   }
+  }
+  return {
+   id:lesson.id,title:lesson.title,point:pointIndex+1,
+   pointCount:points.length,pages:data.pages,
+   paragraphs,blocks:data.blocks,text:textParts.filter(Boolean).join("\n\n")
+  };
+ }
  const cacheKey=lesson.id+":"+pointIndex;
  if(!historyEbookTextCache.has(cacheKey)){
   const promise=(async()=>{
