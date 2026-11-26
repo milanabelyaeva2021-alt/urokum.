@@ -201,6 +201,142 @@ async function getHistory11Pdf() {
   }
   return history11PdfPromise;
 }
+
+// Ebook text is extracted on the server and delivered as ordinary HTML-friendly
+// paragraphs. Visitors never need a PDF viewer or an uploaded PDF.
+const historyOutline=JSON.parse(await fs.readFile(path.join(__dirname,"public/books/h11/outline.json"),"utf8"));
+const historyPointMap=JSON.parse(await fs.readFile(path.join(__dirname,"public/books/h11/points.json"),"utf8")).paragraphs;
+const historyParagraphs=[];
+function listHistoryParagraphs(nodes){
+ for(const n of nodes||[]){
+  if(n.type==="paragraph")historyParagraphs.push(n);
+  if(n.children)listHistoryParagraphs(n.children);
+ }
+}
+listHistoryParagraphs(historyOutline.contents);
+let historyEbookPdfPromise;
+const historyEbookTextCache=new Map();
+async function getHistoryEbookPDF(){
+ if(!historyEbookPdfPromise)historyEbookPdfPromise=getHistory11Pdf().then(data=>
+   pdfjsLib.getDocument({data:new Uint8Array(data),useSystemFonts:true,disableFontFace:true}).promise
+ ).catch(error=>{historyEbookPdfPromise=null;throw error});
+ return historyEbookPdfPromise;
+}
+function ebookClean(value){
+ return String(value||"").replace(/[\u00ad\ufeff]/g,"")
+   .replace(/\s+/g," ").trim();
+}
+function getHistoryEbookLines(page,items,from,to,pageNumber){
+ const h=page.view[3],w=page.view[2],pieces=[];
+ (items||[]).forEach((item,seq)=>{
+  if(typeof item.str!=="string"||!/[А-Яа-яІіЇїЄєҐґA-Za-z]/u.test(item.str))return;
+  const x=Number(item.transform?.[4]),y=h-Number(item.transform?.[5]);
+  const width=Number(item.width||0),height=Math.abs(Number(item.height||0));
+  if(![x,y,width,height].every(Number.isFinite)||width<=0||
+    x<28||x>w-18||y<50||y>h-36||height<6.8||height>15.8)return;
+  if(pageNumber===from.page&&y<from.y-11)return;
+  if(to&&pageNumber===to.page&&y>=to.y-5)return;
+  pieces.push({x,y,width,height,str:item.str,seq,chars:item.str.trim().length});
+ });
+ const rows=[];
+ for(const piece of pieces){
+  let row=rows.find(row=>Math.abs(row.y-piece.y)<2.7);
+  if(!row){row={y:piece.y,parts:[]};rows.push(row)}
+  row.parts.push(piece);
+ }
+ const body=[];
+ for(const row of rows){
+  const ordered=row.parts.sort((a,b)=>a.x-b.x),groups=[];
+  let group=[],right=-Infinity;
+  for(const piece of ordered){
+   if(group.length && piece.x-right>12){groups.push(group);group=[]}
+   group.push(piece);right=Math.max(right,piece.x+piece.width);
+  }
+  if(group.length)groups.push(group);
+  for(const parts of groups){
+   const count=parts.reduce((n,p)=>n+p.chars,0);
+   const regular=parts.reduce((n,p)=>n+(p.height>=9.15&&p.height<=10.95?p.chars:0),0);
+   const minX=Math.min(...parts.map(p=>p.x));
+   const maxX=Math.max(...parts.map(p=>p.x+p.width));
+   if(count<5||maxX-minX<18||regular<4||regular/count<.46)continue;
+   const line=ebookClean(parts.map(p=>p.str).join(""));
+   if(!line||/^(?:§\s*\d|РОЗДІЛ\s+\d)/iu.test(line))continue;
+   body.push({str:line,x:minX,y:row.y,seq:Math.min(...parts.map(p=>p.seq))});
+  }
+ }
+ // Preserve the publisher's text-stream sequence, including columns,
+ // rather than mixing unrelated sidebars by their vertical position.
+ return body.sort((a,b)=>a.seq-b.seq);
+}
+function historyEbookParagraphs(rows){
+ const result=[];let current="",last=null,minX=null;
+ const finish=()=>{const text=ebookClean(current);if(text.length>=8)result.push(text);current="";};
+ for(const row of rows){
+  if(row.page!==last?.page){minX=null}
+  minX=minX==null?row.x:Math.min(minX,row.x);
+  const startsNew=last&&current.length>60&&(
+    row.page!==last.page ||
+    row.y<last.y-5 ||
+    row.y-last.y>19 ||
+    (row.x-minX>17 && /[.!?;»)]$/.test(current.trim()))
+  );
+  if(startsNew)finish();
+  const next=ebookClean(row.str);
+  if(!next){last=row;continue;}
+  if(current){
+   // Only join hyphenated words when the next line begins lowercase.
+   if(/[-\u2010]$/.test(current)&&/^[а-яіїєґ]/u.test(next)){
+    current=current.replace(/[-\u2010]$/u,"")+next;
+   } else current+=" "+next;
+  }else current=next;
+  last=row;
+  if(current.length>850&&/[.!?]$/.test(current.trim()))finish();
+ }
+ finish();
+ return result;
+}
+async function getHistoryEbookPoint(paraIndex,pointIndex){
+ const lesson=historyParagraphs[paraIndex];
+ if(!lesson)throw new Error("Unknown lesson");
+ const points=historyPointMap[lesson.id]||[];
+ if(!points[pointIndex])throw new Error("Unknown teaching point");
+ const cacheKey=lesson.id+":"+pointIndex;
+ if(!historyEbookTextCache.has(cacheKey)){
+  const promise=(async()=>{
+   const document=await getHistoryEbookPDF();
+   const start=points[pointIndex],next=points[pointIndex+1]||null;
+   const finalPage=next?next.page:lesson.endPage;
+   const rows=[];
+   for(let n=start.page;n<=finalPage;n++){
+    const page=await document.getPage(n),content=await page.getTextContent();
+    for(const line of getHistoryEbookLines(page,content.items,start,next,n))
+      rows.push({...line,page:n});
+   }
+   const paragraphs=historyEbookParagraphs(rows);
+   if(!paragraphs.length)throw new Error("No electronic text detected");
+   const text=paragraphs.join("\n\n");
+   return {id:lesson.id,title:lesson.title,point:pointIndex+1,pointCount:points.length,
+     pages:[start.page,finalPage],paragraphs,text};
+  })().catch(error=>{historyEbookTextCache.delete(cacheKey);throw error});
+  historyEbookTextCache.set(cacheKey,promise);
+ }
+ return historyEbookTextCache.get(cacheKey);
+}
+app.get("/api/ebook/history11-gisem-stand/:paragraph/:point",async(req,res)=>{
+ const para=Number(req.params.paragraph),point=Number(req.params.point);
+ if(!Number.isInteger(para)||para<1||para>historyParagraphs.length||
+    !Number.isInteger(point)||point<1||point>20)
+  return res.status(400).json({error:"Некоректний параграф або пункт"});
+ try{
+  const data=await getHistoryEbookPoint(para-1,point-1);
+  res.setHeader("Cache-Control","public, max-age=3600");
+  res.json(data);
+ }catch(error){
+  console.error("Ebook extraction failed",error.message);
+  res.status(503).json({error:"Не вдалося завантажити електронний текст. Онови сторінку та спробуй ще раз."});
+ }
+});
+
 app.use("/vendor/pdfjs", express.static(path.join(__dirname,"node_modules/pdfjs-dist/build")));
 app.get("/api/printed-book/history11-gisem-stand.pdf", async (req,res) => {
   try {
