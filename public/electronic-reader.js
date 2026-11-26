@@ -319,6 +319,10 @@ async function loadPoint(i,j){
   if(Array.isArray(data.blocks)&&data.blocks.length)renderEbookBlocks(host,data.blocks);
   else{host.replaceChildren();data.paragraphs.forEach(part=>host.append(make("p",null,part)))}
   $("loading").hidden=true;$("bookShell").hidden=false;
+  // An exam opens an exact source excerpt in a separate tab without losing the exam.
+  const requested=new URLSearchParams(location.search).get("find");
+  if(requested&&requested.length<400)
+   setTimeout(()=>{if(token===loadToken)revealEvidenceInText(requested)},120);
   progress();
   const done=completed.has(lesson.id+":"+(j+1));
   const passed=skipped.has(lesson.id+":"+(j+1));
@@ -410,6 +414,88 @@ function quizStepBar(state){
  }
  return steps;
 }
+
+/* Text evidence must be an actual, sufficiently long verbatim excerpt.
+   Normalize punctuation and whitespace, but never invent a source location. */
+function evidenceIndex(text){
+ const raw=String(text||"");let value="",offsets=[];
+ for(let i=0;i<raw.length;i++){
+  const lower=raw[i].toLocaleLowerCase("uk");
+  if(/[\p{L}\p{N}]/u.test(lower)){value+=lower;offsets.push(i)}
+  else if(value&&!value.endsWith(" ")){value+=" ";offsets.push(i)}
+ }
+ if(value.endsWith(" ")){value=value.slice(0,-1);offsets.pop()}
+ return {value,offsets};
+}
+function evidenceBounds(haystack,quote){
+ const searched=evidenceIndex(haystack),expected=evidenceIndex(quote).value;
+ if(expected.length<24||expected.split(" ").length<4)return null;
+ const at=searched.value.indexOf(expected);
+ if(at<0)return null;
+ return {start:searched.offsets[at],end:searched.offsets[at+expected.length-1]+1};
+}
+function availableEvidenceQuote(q){
+ const text=String(q?.sourceQuote||"").trim();
+ if(text&&text.length>=24)return text;
+ // For older, cached questions, accept only an explanation that is itself an exact excerpt.
+ const old=String(q?.explanation||q?.referenceAnswer||"").trim();
+ return old.length>=30?old:"";
+}
+function revealEvidenceInText(quote){
+ if(!quote)return false;
+ const area=$("ebookText");
+ for(const el of area.querySelectorAll("p, li, td, dd, blockquote")){
+  const literal=el.textContent||"",bounds=evidenceBounds(literal,quote);
+  if(!bounds)continue;
+  // These ebook blocks have a single text payload; do not destroy nested markup.
+  const unexpectedMarkup=Array.from(el.children).some(x=>x.tagName!=="MARK");
+  if(unexpectedMarkup)continue;
+  for(const mark of el.querySelectorAll("mark.ebook-source-highlight")){
+   mark.replaceWith(document.createTextNode(mark.textContent));
+  }
+  const oldBack=area.querySelector(".source-back-link");
+  if(oldBack)oldBack.remove();
+  const before=literal.slice(0,bounds.start),target=literal.slice(bounds.start,bounds.end),after=literal.slice(bounds.end);
+  const highlight=document.createElement("mark");highlight.className="ebook-source-highlight";highlight.textContent=target;
+  el.replaceChildren(document.createTextNode(before),highlight,document.createTextNode(after));
+  const details=el.closest("details");if(details)details.open=true;
+  const back=make("div","source-back-link");
+  const button=make("button","secondary","← Повернутися до запитання");
+  button.onclick=()=>go($("quiz"));back.append(button);
+  el.insertAdjacentElement("afterend",back);
+  highlight.scrollIntoView({behavior:"smooth",block:"center"});
+  return true;
+ }
+ return false;
+}
+function findEvidencePoint(quote){
+ if(!quote)return null;
+ const length=(points[lessons[lessonIndex]?.id]||[]).length;
+ for(let i=0;i<length;i++){
+  const part=textCache.get(lessonIndex+":"+i);
+  if(part?.text&&evidenceBounds(part.text,quote))return i;
+ }
+ return null;
+}
+function showEvidenceForQuestion(q,feedback,mode){
+ const quote=availableEvidenceQuote(q);
+ if(mode==="review"){
+  const index=findEvidencePoint(quote);
+  if(index!==null){
+   const url=new URL(location.href);
+   url.searchParams.set("paragraph",String(lessonIndex+1));
+   url.searchParams.set("point",String(index+1));
+   url.searchParams.set("find",quote);
+   window.open(url.toString(),"_blank","noopener");
+   const info=make("p","source-note","Відкрито відповідний пункт у новій вкладці, щоб самостійна робота не перервалася.");
+   feedback.append(info);
+   return;
+  }
+ }else if(revealEvidenceInText(quote))return;
+ const info=make("p","source-note","Для цього запитання ще немає перевіреного дослівного уривка. Можеш повернутися до тексту пункту та звірити відповідь самостійно.");
+ feedback.append(info);
+}
+
 function showQuestion(){
  const state=quizState;
  if(!state || state.index>=state.questions.length)return;
@@ -440,6 +526,11 @@ function showQuestion(){
   feedback.className="quiz-feedback-box "+(result.status==="correct"?"is-correct":
     result.status==="wrong"?"is-wrong":"is-neutral");
   explainMarkup(feedback,message);
+  if(result.status==="wrong"){
+   const find=make("button","secondary","📖 Показати в тексті");
+   find.onclick=()=>showEvidenceForQuestion(q,feedback,state.mode);
+   const row=make("div","source-back-link");row.append(find);card.append(row);
+  }
   card.append(next);go(feedback);
  };
  const skipOne=make("button","secondary",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");
