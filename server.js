@@ -701,11 +701,11 @@ app.post("/api/tutor", async (req, res) => {
           throw Error("Wrong quiz structure");
         // Treat model output as untrusted: only keep exact source excerpts.
         const normalizedEvidence=value=>String(value||"").toLocaleLowerCase("uk").replace(/[^\p{L}\p{N}]+/gu," ").trim();
-        const wholeText=normalizedEvidence(String(text).slice(0,15000));
+        const sourcePassages=String(text).slice(0,15000).split(/\n{2,}/u).map(normalizedEvidence);
         for(const item of qs){
           const quote=typeof item.sourceQuote==="string"?item.sourceQuote.trim().slice(0,250):"";
           const normalized=normalizedEvidence(quote);
-          if(normalized.length>=24 && normalized.split(" ").length>=4 && wholeText.includes(normalized))
+          if(normalized.length>=24 && normalized.split(" ").length>=4 && sourcePassages.some(p=>p.includes(normalized)))
             item.sourceQuote=quote;
           else delete item.sourceQuote;
         }
