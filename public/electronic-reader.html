@@ -197,6 +197,45 @@ mark.ebook-source-highlight{transition:background-color .2s}
 .progress-transfer-actions{display:flex;gap:8px;flex-wrap:wrap}
 .progress-transfer-actions button{font-size:12px;min-height:37px;padding:7px 10px;flex:1 1 130px}
 @media(max-width:650px){.ebookText p{hyphens:manual;-webkit-hyphens:manual;overflow-wrap:break-word;word-break:normal}.ebook-bullets,.ebook-vocab dd,.ebook-source blockquote,.ebook-fact p{hyphens:manual;-webkit-hyphens:manual}}
+
+/* Compact replay action by the textbook title. */
+.reader-restart{display:flex;justify-content:flex-end;margin:-2px 0 20px}
+.reader-restart button{font-size:13px;padding:8px 13px;min-height:39px;border-color:var(--line)}
+/* The quiz stays alive in memory while a relevant source point is being read. */
+.evidence-view{border:1px solid var(--line);border-radius:17px;padding:24px 26px;background:var(--card);box-shadow:0 8px 25px -23px #4a247d;margin:20px 0}
+.evidence-view-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:16px}
+.evidence-view h2{font-size:20px;margin:4px 0 0;line-height:1.35}
+.evidence-kicker{font-weight:750;font-size:12px;color:var(--green)}
+#evidenceBackBottom{display:block;margin:22px 0 0}
+/* Use a calm purple underline instead of loud yellow boxes on the text. */
+mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inherit!important;outline:none!important;box-shadow:none!important;border-bottom:2px solid #9b70d6;border-radius:2px;padding:1px 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+:root[data-theme="dark"] mark.ebook-source-highlight{background:rgba(183,145,244,.3)!important;border-bottom-color:#d1b3ff}
+/* Right-side, persistent teacher chat with a threaded conversation. */
+.teacher-fab{position:fixed;right:20px;bottom:20px;z-index:29;background:var(--green);color:var(--bg);padding:12px 17px;border:1px solid var(--line);box-shadow:0 8px 30px #301b6140;border-radius:99px;font-size:14px;font-weight:800}
+.teacher-panel{position:fixed;right:16px;top:88px;bottom:18px;width:min(370px,calc(100vw - 32px));z-index:30;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 45px #2914442b;display:flex;flex-direction:column;overflow:hidden}
+.teacher-panel[hidden],.evidence-view[hidden]{display:none!important}
+.teacher-head{padding:14px 15px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:var(--card);flex:none}
+.teacher-head strong{display:block;font-size:16px;line-height:1.3}
+.teacher-head .teacher-caption{display:block}
+.teacher-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--greenSoft);font-size:19px}
+.teacher-caption{color:var(--muted);font-size:11px;line-height:1.45}
+.teacher-close,.teacher-context button{border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
+.teacher-close{margin-left:auto;border-radius:8px;width:32px;height:32px}
+.teacher-context{display:flex;gap:8px;align-items:flex-start;margin:10px 12px 0;padding:10px 11px;border:1px solid var(--line);background:var(--greenSoft);border-radius:10px;font-size:12px;line-height:1.45;flex:none}
+.teacher-context span{flex:1;min-width:0;overflow-wrap:anywhere;max-height:75px;overflow:auto}
+.teacher-messages{flex:1;overflow:auto;padding:18px 14px 12px;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
+.teacher-empty{color:var(--muted);font-size:14px;line-height:1.6;margin:auto 8px;text-align:center}
+.teacher-message{max-width:94%;padding:11px 13px;line-height:1.55;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:14px}
+.teacher-message.assistant{align-self:flex-start;background:var(--greenSoft);border-bottom-left-radius:4px}
+.teacher-message.user{align-self:flex-end;background:var(--green);color:#fff;border-bottom-right-radius:4px}
+.teacher-message .message-role{font-weight:800;font-size:11px;display:block;opacity:.75;margin-bottom:4px}
+.teacher-compose{padding:12px;border-top:1px solid var(--line);flex:none;background:var(--card)}
+.teacher-compose textarea{display:block;width:100%;resize:vertical;max-height:135px;min-height:65px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--ink);font:400 13px/1.55 var(--ui)}
+.teacher-compose-actions{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
+.teacher-compose-actions .primary{padding:9px 14px;min-height:38px;font-size:13px}
+.teacher-clear{background:transparent;border:0;color:var(--muted);font-size:12px;padding:7px}
+@media(min-width:1360px){body.teacher-open main{transform:translateX(-125px)}}
+@media(max-width:700px){.teacher-panel{top:8px;right:8px;bottom:8px;width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.teacher-fab{right:13px;bottom:13px}.evidence-view{padding:17px 15px}.evidence-view-head{align-items:flex-start;flex-direction:column}.reader-restart button{font-size:12px}}
 </style>
 </head>
 <body>
@@ -238,7 +277,8 @@ mark.ebook-source-highlight{transition:background-color .2s}
  <div id="bookShell" hidden>
   <div class="eyebrow" id="lessonEyebrow">Історія України · 11 клас</div>
   <h1 id="lessonTitle">Електронний підручник</h1>
-  <article class="reader">
+  <div class="reader-restart"><button id="restartParagraphBtn" type="button" class="secondary restart-paragraph">↻ Пройти параграф знову</button></div>
+  <article class="reader" id="readerArticle">
    <div class="ebookText" id="ebookText"></div>
    <div class="readEnd" id="readEnd">
     <p class="hint">Коли дочитаєш пункт, перевір, що ти зрозумів(ла).</p>
@@ -246,19 +286,42 @@ mark.ebook-source-highlight{transition:background-color .2s}
     <button class="secondary" id="skipAllQuiz" type="button">Пропустити перевірку →</button>
    </div>
   </article>
+  <section id="evidenceView" class="evidence-view" hidden aria-label="Джерело відповіді в підручнику">
+   <div class="evidence-view-head">
+    <div><span class="evidence-kicker">📖 Знайди відповідь у підручнику</span><h2 id="evidenceTitle"></h2></div>
+    <button id="evidenceBackTop" class="secondary" type="button">← До запитання</button>
+   </div>
+   <div class="ebookText" id="evidenceText"></div>
+   <button id="evidenceBackBottom" class="secondary" type="button">← Повернутися до запитання</button>
+  </section>
   <section id="quiz" class="card stopCard" hidden aria-live="polite"></section>
   <section id="finished" class="card completion" hidden></section>
   <section id="paragraphSummary" class="card paragraph-summary" hidden aria-live="polite"></section>
   <section id="review" class="card" hidden></section>
-  <details class="ask" id="askPanel">
-   <summary>💬 Запитати ШІ про прочитане</summary>
-   <p>Запитай своїми словами про події, поняття чи причини.</p>
-   <textarea id="studentQuestion" class="written" maxlength="500" rows="3" placeholder="Що саме хочеш зрозуміти?"></textarea>
-   <button class="primary" id="sendQuestion">Запитати ШІ</button>
-   <div id="answerFromAI" class="reviewText" hidden></div>
-  </details>
+
  </div>
 </main>
+<button id="teacherToggle" class="teacher-fab" type="button" aria-controls="teacherPanel" aria-expanded="false">💬 Учитель-ШІ</button>
+<aside id="teacherPanel" class="teacher-panel" aria-label="Чат з Учителем-ШІ" hidden>
+ <div class="teacher-head">
+  <span class="teacher-icon" aria-hidden="true">🧠</span>
+  <div><strong>Учитель-ШІ</strong><span class="teacher-caption">Запитуй про матеріал та відповіді</span></div>
+  <button id="teacherClose" class="teacher-close" type="button" aria-label="Закрити чат">✕</button>
+ </div>
+ <div id="teacherContext" class="teacher-context" hidden>
+  <span id="teacherContextText"></span>
+  <button id="teacherClearContext" type="button" aria-label="Прибрати тему запитання">✕</button>
+ </div>
+ <div id="teacherMessages" class="teacher-messages" role="log" aria-label="Історія розмови" aria-live="polite"></div>
+ <div class="teacher-compose">
+  <textarea id="studentQuestion" rows="2" maxlength="500" placeholder="Запитай про підручник або своє запитання…" aria-label="Нове запитання до ШІ"></textarea>
+  <div class="teacher-compose-actions">
+   <button id="teacherClearHistory" type="button" class="teacher-clear" title="Очистити розмову">Очистити</button>
+   <button id="sendQuestion" class="primary" type="button">Надіслати ↑</button>
+  </div>
+  <span class="teacher-caption">Enter — надіслати · Shift+Enter — новий рядок</span>
+ </div>
+</aside>
 <script type="module" src="/electronic-reader.js"></script>
 </body>
 </html>
