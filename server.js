@@ -386,12 +386,12 @@ async function getHistoryEbookPoint(paraIndex,pointIndex){
  if(!lesson)throw new Error("Unknown lesson");
  const points=historyPointMap[lesson.id]||[];
  if(!points[pointIndex])throw new Error("Unknown teaching point");
- // The introduction is editorially checked against the textbook.
- // Its tables, glossary, historical source and chart are structured content,
- // not rough PDF OCR or accidentally captured captions.
- if(paraIndex===0){
+ // §1 and §2 use editorially structured text rather than rough PDF extraction.
+ // §2: [ ] = interesting facts, < > = historical sources, " " = tables.
+ if(paraIndex===0||paraIndex===1){
+  const basename=paraIndex===0?"intro-point-":"paragraph-2-point-";
   const file=path.join(__dirname,"public","books","h11",
-    "intro-point-"+String(pointIndex+1)+".json");
+    basename+String(pointIndex+1)+".json");
   const data=JSON.parse(await fs.readFile(file,"utf8"));
   const paragraphs=[];
   const textParts=[];
@@ -405,7 +405,7 @@ async function getHistoryEbookPoint(paraIndex,pointIndex){
     textParts.push(...(block.items||[]));
    } else if(block.type==="terms"){
     textParts.push(...(block.entries||[]).map(x=>x.term+": "+x.definition));
-   } else if(block.type==="source"){
+   } else if(block.type==="source"||block.type==="note"){
     textParts.push(block.text||"");
    } else if(block.type==="table"){
     for(const row of block.rows||[])textParts.push(row.join(" | "));
