@@ -106,6 +106,46 @@ async function showParagraphSummary(){
   body.replaceChildren(make("p","small","Не вдалося відкрити конспект."));
  }
 }
+// Progress belongs to the learner; transfer via local JSON rather than insecure shared server files.
+const TRANSFER_KEYS=[SAVE,DONE,REVIEW_DONE,SKIPPED,QUIZ_CACHE,ATTEMPTS,FONT_SIZE,REVIEW_QUIZ_CACHE];
+$("exportProgress").onclick=()=>{
+ const values={};
+ for(const key of TRANSFER_KEYS){
+  const value=localStorage.getItem(key);
+  if(value!=null)values[key]=value;
+ }
+ const doc={format:"urokum-progress",version:1,book:BOOK,createdAt:new Date().toISOString(),values};
+ const file=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"});
+ const address=URL.createObjectURL(file);
+ const link=document.createElement("a");
+ link.href=address;link.download="urokum-progres.json";
+ document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(address),5000);
+ $("progressTransferStatus").textContent="Прогрес збережено у файл. На іншому пристрої відкрий його в Урокумі.";
+};
+$("importProgress").onclick=()=>$("importProgressFile").click();
+$("importProgressFile").onchange=async()=>{
+ const input=$("importProgressFile"),file=input.files?.[0];
+ if(!file)return;
+ const status=$("progressTransferStatus");
+ try{
+  if(file.size>1_000_000)throw Error("Файл занадто великий.");
+  const parsed=JSON.parse(await file.text());
+  if(parsed?.format!=="urokum-progress"||parsed?.version!==1||parsed?.book!==BOOK||
+     !parsed.values||typeof parsed.values!=="object"||Array.isArray(parsed.values))
+   throw Error("Це не файл прогресу цього підручника.");
+  const items=Object.entries(parsed.values);
+  if(items.some(([key,value])=>!TRANSFER_KEYS.includes(key)||typeof value!=="string"||value.length>450_000))
+   throw Error("У файлі є некоректні дані.");
+  for(const [key,value] of items)JSON.parse(value);
+  if(!confirm("Відновлення замінить прогрес цього підручника на поточному пристрої. Продовжити?"))return;
+  for(const [key,value] of items)localStorage.setItem(key,value);
+  status.textContent="Прогрес відновлено. Оновлюю сторінку…";
+  location.reload();
+ }catch(error){status.textContent=error.message||"Не вдалося відкрити файл."}
+ finally{input.value=""}
+};
+
 const safeText=value=>String(value||"").replace(/[\u00ad\u200b\ufeff]/g,"").replace(/\s+/g," ").trim();
 function explainMarkup(root,text){
  root.replaceChildren();
