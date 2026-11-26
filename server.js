@@ -1,4 +1,5 @@
 import express from "express";
+import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import multer from "multer";
 import fs from "node:fs/promises";
@@ -495,6 +496,9 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
   } catch { res.status(404).json({ error: "Підручник не знайдено." }); }
 });
 
+// Save generated textbook questions in memory, so repeat views do not
+// consume scarce free-tier requests. Never cache students' written answers.
+const textbookQuizCache=new Map();
 app.post("/api/tutor", async (req, res) => {
   const { text, task, question, retelling, studentAnswer, referenceAnswer } = req.body || {};
   if (task === "ask-question" && (typeof question !== "string" || question.trim().length < 3 || question.length > 500)) return res.status(400).json({error:"Напиши коротке запитання до прочитаного пункту."});
@@ -505,7 +509,7 @@ app.post("/api/tutor", async (req, res) => {
     typeof referenceAnswer !== "string" || referenceAnswer.length < 5 || referenceAnswer.length > 2000
   )) return res.status(400).json({ error: "Напиши відповідь своїми словами, щоб ШІ міг її перевірити." });
   if (!text) return res.status(400).json({ error: "Немає тексту сторінки." });
-  if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) return res.status(503).json({ error: "ШІ ще не підключено. Потрібен GROQ_API_KEY (безкоштовний тариф) або OPENAI_API_KEY у захищених налаштуваннях Render." });
+  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY && !process.env.OPENROUTER_API_KEY && !(process.env.ALLOW_PAID_AI==="true" && process.env.OPENAI_API_KEY)) return res.status(503).json({error:"Безкоштовний ШІ зараз не налаштований. Читання та пропуск перевірки доступні."});
   const prompt = task === "check-open"
     ? "Ти доброзичливий учитель історії. Перевір відповідь учня за матеріалом пункту підручника. Поясни, що правильно, що неточно, і що ще варто згадати. Не вимагай дослівного збігу з прикладом відповіді. Не вигадуй фактів. Дай короткий відгук українською (3–5 речень). Запитання: "+question.trim().slice(0,500)+"\\nВідповідь учня: "+studentAnswer.trim().slice(0,1800)+"\\nОрієнтовна відповідь: "+referenceAnswer.trim().slice(0,2000)
     : task === "paragraph-review"
@@ -522,58 +526,76 @@ app.post("/api/tutor", async (req, res) => {
       ? "Створи ОДНЕ контрольне запитання для паузи під час читання. Поверни ЛИШЕ валідний JSON без markdown у форматі: {\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":0,\"explanation\":\"...\"}. correct — індекс правильної відповіді від 0 до 3. Усе має перевіряти знання саме з цього тексту."
       : "Поясни цей фрагмент підручника простою українською для школяра. Виділи головне та поясни складні слова.";
   try {
-    // For a free-tier AI pilot, use Groq when a server-side key is configured.
-    // API keys must stay in Render environment variables, never browser code.
-    const useGroq = Boolean(process.env.GROQ_API_KEY);
-    const input = prompt + "\n\nТекст підручника:\n" + String(text).slice(0, 15000);
-    let response, output;
-    if (useGroq) {
-      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + process.env.GROQ_API_KEY,
-          "Content-Type": "application/json"
-        },
-        signal: AbortSignal.timeout(30000),
-        body: JSON.stringify({
-          model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
-          messages: [
-            { role: "system", content: "Ти ввічливий освітній асистент. Відповідай лише на основі наданого українського навчального тексту. Не додавай вигаданих фактів." },
-            { role: "user", content: input }
-          ],
-          temperature: 0.25,
-          max_completion_tokens: 3072
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        console.warn("Groq tutor request failed", response.status);
-        const friendly = response.status === 429
-          ? "Безкоштовний ліміт запитів ШІ тимчасово вичерпаний. Спробуй пізніше."
-          : "ШІ не зміг відповісти. Перевір ключ або доступність моделі.";
-        return res.status(response.status === 429 ? 429 : 502).json({ error: friendly });
+    // Never silently spend paid API credits. Paid OpenAI is opt-in only.
+    const input=prompt+"\n\nТекст підручника:\n"+String(text).slice(0,15000);
+    const cacheable=task==="multi-checkpoint"||task==="paragraph-review";
+    const cacheKey=cacheable?createHash("sha256").update(task+"|"+input).digest("hex"):null;
+    if(cacheKey){
+      const cached=textbookQuizCache.get(cacheKey);
+      if(cached&&cached.expires>Date.now())return res.json(cached.response);
+      if(cached)textbookQuizCache.delete(cacheKey);
+    }
+    const providers=[];
+    if(process.env.GEMINI_API_KEY)providers.push("gemini");
+    if(process.env.GROQ_API_KEY)providers.push("groq");
+    if(process.env.OPENROUTER_API_KEY)providers.push("openrouter");
+    if(!providers.length && process.env.ALLOW_PAID_AI==="true" && process.env.OPENAI_API_KEY)providers.push("openai");
+    let output="",lastStatus=503,usedProvider="";
+    for(const provider of providers){
+      let response,answer;
+      try{
+        if(provider==="gemini"){
+          const model=process.env.GEMINI_MODEL||"gemini-2.5-flash-lite";
+          response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent",{
+            method:"POST",headers:{"x-goog-api-key":process.env.GEMINI_API_KEY,"Content-Type":"application/json"},
+            signal:AbortSignal.timeout(11500),
+            body:JSON.stringify({
+              contents:[{role:"user",parts:[{text:input}]}],
+              generationConfig:{temperature:0.25,maxOutputTokens:3072}
+            })
+          });
+          answer=await response.json();
+          if(response.ok)output=(answer.candidates?.[0]?.content?.parts||[]).map(x=>x.text||"").join("\n");
+        }else if(provider==="groq"||provider==="openrouter"){
+          const isGroq=provider==="groq";
+          response=await fetch(isGroq?"https://api.groq.com/openai/v1/chat/completions":"https://openrouter.ai/api/v1/chat/completions",{
+            method:"POST",headers:{
+              "Authorization":"Bearer "+(isGroq?process.env.GROQ_API_KEY:process.env.OPENROUTER_API_KEY),
+              "Content-Type":"application/json"
+            },
+            signal:AbortSignal.timeout(11500),
+            body:JSON.stringify({
+              model:isGroq?(process.env.GROQ_MODEL||"openai/gpt-oss-20b"):(process.env.OPENROUTER_MODEL||"openrouter/free"),
+              messages:[
+                {role:"system",content:"Ти український освітній асистент. Пояснюй лише на основі наданого навчального тексту, без вигаданих фактів."},
+                {role:"user",content:input}
+              ],temperature:0.25,max_completion_tokens:3072
+            })
+          });
+          answer=await response.json();
+          if(response.ok)output=answer.choices?.[0]?.message?.content||"";
+        }else{
+          response=await fetch("https://api.openai.com/v1/responses",{
+            method:"POST",headers:{"Authorization":"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},
+            signal:AbortSignal.timeout(11500),
+            body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-4.1-mini",input})
+          });
+          answer=await response.json();
+          if(response.ok)output=(answer.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n");
+        }
+        lastStatus=response.status;
+        if(response.ok&&output.trim()){usedProvider=provider;break}
+        console.warn("AI provider unavailable",provider,response.status);
+        output="";
+      }catch(error){
+        console.warn("AI provider error",provider,error.name||"unknown");
       }
-      output = data.choices?.[0]?.message?.content || "";
-    } else {
-      response = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
-          "Content-Type": "application/json"
-        },
-        signal: AbortSignal.timeout(30000),
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-          input
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        console.warn("OpenAI tutor request failed", response.status);
-        return res.status(502).json({ error: "Не вдалося отримати відповідь від ШІ." });
-      }
-      output = (data.output || []).flatMap(x => x.content || [])
-        .filter(x => x.type === "output_text").map(x => x.text).join("\n");
+    }
+    if(!usedProvider){
+      const friendly=lastStatus===429
+        ?"Безкоштовний ліміт ШІ вичерпаний. Можеш пропустити перевірку або повернутися пізніше."
+        :"Безкоштовний ШІ тимчасово недоступний. Читання й пропуск перевірки працюють.";
+      return res.status(lastStatus===429?429:503).json({error:friendly});
     }
     if (task === "multi-checkpoint" || task === "checkpoint" || task === "paragraph-review") {
       const cleaned=output.replace(/^\`\`\`(?:json)?\s*/i,"").replace(/\`\`\`\s*$/i,"").trim();
@@ -590,7 +612,10 @@ app.post("/api/tutor", async (req, res) => {
             q.options.some(x=>typeof x!=="string") || !Number.isInteger(q.correct) || q.correct<0 || q.correct>3;
         }))
           throw Error("Wrong quiz structure");
-        return res.json({questions:qs});
+        const result={questions:qs};
+        if(cacheKey){if(textbookQuizCache.size>200)textbookQuizCache.delete(textbookQuizCache.keys().next().value);
+          textbookQuizCache.set(cacheKey,{expires:Date.now()+24*3600_000,response:result});}
+        return res.json(result);
       }catch(error){
         console.warn("AI quiz JSON invalid",error.message);
         return res.status(502).json({error:"ШІ не повернув потрібну кількість коректних запитань. Спробуй ще раз."});
