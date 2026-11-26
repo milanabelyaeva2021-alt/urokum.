@@ -361,7 +361,7 @@ async function loadPoint(i,j){
  $("bookShell").hidden=true;$("loading").hidden=false;
  $("loading").textContent="Готую електронний текст пункту "+(j+1)+"…";
  $("quiz").hidden=true;$("finished").hidden=true;$("review").hidden=true;$("paragraphSummary").hidden=true;
- activeTeacherQuizContext=null;
+ activeTeacherQuizContext=[...currentTeacherThread()].reverse().find(m=>m.role==="user")?.context||null;
  renderTeacherMessages();
  refreshTeacherContext();
  $("evidenceView").hidden=true;$("readerArticle").hidden=false;
@@ -1081,9 +1081,10 @@ async function sendTeacherMessage(){
  if(teacherBusy)return;
  const key=teacherThreadKey(),context=activeTeacherQuizContext?
   {...activeTeacherQuizContext}:null;
- const previous=currentTeacherThread().slice(-10);
+ const wholeThread=currentTeacherThread();
+ const previous=wholeThread.slice(-10);
  const nextMessage={role:"user",content:text,...(context?{context}:{})};
- saveTeacherThread([...previous,nextMessage],key);
+ saveTeacherThread([...wholeThread,nextMessage],key);
  field.value="";
  teacherBusy=true;$("sendQuestion").disabled=true;
  renderTeacherMessages();
