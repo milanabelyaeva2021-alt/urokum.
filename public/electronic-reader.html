@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400..700&family=Onest:wght@400..800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#edf2ef;--card:#fff;--ink:#182923;--muted:#5b6c63;--line:#d0dcd4;--green:#19674e;--greenSoft:#ddede5;--yellow:#f0bd21;--warn:#8b4b19;--bad:#a53235;--badBg:#fceaea;--read:"Literata",Georgia,serif;--ui:"Onest",Arial,sans-serif}
-:root[data-theme="dark"]{--bg:#111c17;--card:#192820;--ink:#e9f4ee;--muted:#abc2b3;--line:#30473a;--green:#83d4b1;--greenSoft:#233d30;--yellow:#d9a723;--warn:#f6cb7d;--bad:#ff9898;--badBg:#392323;color-scheme:dark}
+:root{--bg:#f8f6fc;--card:#fff;--ink:#29233d;--muted:#756d87;--line:#e4dcef;--green:#6845a6;--greenSoft:#efe8fb;--yellow:#f1c258;--warn:#8b4b19;--bad:#a53235;--badBg:#fceaea;--read:"Literata",Georgia,serif;--ui:"Onest",Arial,sans-serif}
+:root[data-theme="dark"]{--bg:#191523;--card:#292339;--ink:#f7f2ff;--muted:#c4b8d7;--line:#48395c;--green:#c4a9fa;--greenSoft:#392c53;--yellow:#e8bc50;--warn:#f6cb7d;--bad:#ff9898;--badBg:#392323;color-scheme:dark}
 *{box-sizing:border-box}html{scroll-padding-top:130px}body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--ui);padding:0 18px 100px}
 button,a,textarea{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}a{color:var(--green)}:focus-visible{outline:3px solid var(--green);outline-offset:3px}
 .top{max-width:1100px;margin:auto;min-height:78px;display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}.brand{font-size:23px;font-weight:800;letter-spacing:-1px;text-decoration:none;color:var(--ink)}.brand b{color:var(--green)}.top-actions{display:flex;gap:8px;align-items:center}.iconBtn{background:var(--card);color:var(--ink);border:1px solid var(--line);padding:9px 13px;border-radius:12px;font-weight:650;font-size:13px;min-height:42px}
@@ -47,6 +47,37 @@ h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;marg
 #loading[hidden],#bookShell[hidden],#quiz[hidden],#finished[hidden],#review[hidden]{display:none!important}
 #quiz .buttons{margin-top:16px}
 @media(max-width:650px){body{padding:0 15px 80px}.top{min-height:70px}main{margin-top:23px}.card{padding:18px}.stopCard:before{margin:-18px -18px 18px}.top-actions .iconBtn{padding:8px 10px}.ebookText p{line-height:1.75}.progressTop{font-size:11px}}
+
+/* Structurally faithful electronic textbook blocks, in the original Urokum purple palette */
+.ebookText{color:var(--ink)}
+.ebookText h2.point-heading{font:800 clamp(21px,2.8vw,29px)/1.35 var(--ui);margin:23px 0 19px;color:var(--ink);letter-spacing:-.02em}
+.ebookText p{line-height:1.87}
+.ebook-table-wrap{margin:25px 0 30px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+.ebook-table{border-collapse:collapse;width:100%;min-width:520px;background:var(--card);color:var(--ink);font:400 13.5px/1.55 var(--ui)}
+.ebook-table caption{font-weight:800;text-align:left;font-size:16px;color:var(--ink);margin:0 0 9px;caption-side:top}
+.ebook-table th,.ebook-table td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+.ebook-table th{background:#f2e6d6;color:#322735;font-weight:750}
+.ebook-table tbody tr:nth-child(even){background:var(--bg)}
+:root[data-theme="dark"] .ebook-table th{background:#483c56;color:#f8f0ff}
+.ebook-bullets{font:400 17px/1.76 var(--read);padding-left:25px;margin:18px 0 27px}
+.ebook-bullets li{margin-bottom:14px;padding-left:3px}
+.ebook-vocab,.ebook-source{margin:25px 0 30px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:17px 20px}
+.ebook-vocab summary,.ebook-source summary{font:800 16px/1.4 var(--ui);color:var(--green);cursor:pointer}
+.ebook-vocab dl{margin:16px 0 0}.ebook-vocab dt{font-weight:800;color:var(--ink);margin-top:15px}.ebook-vocab dd{margin:5px 0 0;color:var(--muted);line-height:1.75;font-size:14px}
+.ebook-source blockquote{margin:15px 0 0;padding:13px 15px;background:var(--bg);border-left:3px solid var(--green);border-radius:0 8px 8px 0;font:400 15px/1.75 var(--read)}
+.ebook-source .source-caption{font-size:12px;color:var(--muted);margin:14px 0 0}
+.ebook-chart{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:19px;margin:23px 0 28px}
+.ebook-chart figcaption{font-weight:800;line-height:1.45;font-size:16px;margin-bottom:18px}
+.ebook-chart-body{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:22px}
+.ebook-pie{width:205px;aspect-ratio:1;border-radius:50%;border:2px solid var(--card);box-shadow:0 0 0 1px var(--line);flex:none}
+.ebook-chart ul{padding:0;margin:0;list-style:none;min-width:180px;max-width:260px;font-size:14px}
+.ebook-chart li{display:flex;gap:9px;align-items:baseline;margin-bottom:10px}
+.ebook-chart .swatch{width:12px;height:12px;flex:none;border-radius:3px;margin-top:3px}
+.ebook-chart .chart-note{font-size:12px;color:var(--muted);margin-top:15px}
+.ebook-conclusion{border-left:4px solid var(--green);background:var(--greenSoft);padding:15px 18px;border-radius:0 12px 12px 0;margin:27px 0 30px}
+.ebook-conclusion h3{font-size:17px;margin:0 0 9px}
+.ebook-conclusion p{font-size:15px;line-height:1.75;margin:0}
+@media(max-width:650px){.ebook-table{min-width:490px}.ebook-chart-body{flex-direction:column}.ebook-pie{width:185px}}
 </style>
 </head>
 <body>
