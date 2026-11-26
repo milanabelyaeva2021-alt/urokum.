@@ -9,6 +9,10 @@ let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
 let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null,quizRun=0;
 let locallySavedQuestions={},locallySavedReviews={},pointAttempts={},readerFontSize=19;
 const textCache=new Map(),summaryCache=new Map();
+const TEACHER_CHAT_KEY="urokum:teacher-history:"+BOOK;
+const TEACHER_OPEN_KEY="urokum:teacher-panel-open:"+BOOK;
+let teacherChats=fromStore(TEACHER_CHAT_KEY,{});
+let activeTeacherQuizContext=null,teacherBusy=false;
 
 function fromStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
 function toStore(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch{}}
@@ -685,7 +689,10 @@ function showQuestion(){
   if(result.status==="wrong"){
    const find=make("button","secondary","📖 Показати в тексті");
    find.onclick=()=>showEvidenceForQuestion(q,feedback,state.mode);
-   const row=make("div","source-back-link");row.append(find);card.append(row);
+   const row=make("div","source-back-link");row.append(find);
+   const askWhy=make("button","secondary","💬 Запитати ШІ, чому так");
+   askWhy.onclick=()=>openTeacherForQuestion(q,result);
+   row.append(askWhy);card.append(row);
   }
   card.append(next);go(feedback);
  };
@@ -985,18 +992,126 @@ function openRetelling(){
  back.onclick=()=>{host.hidden=true;showCompletion(true)};
  host.append(input,check,responseHost,back);go(host);
 }
-$("sendQuestion").onclick=async()=>{
- const question=$("studentQuestion").value.trim(),host=$("answerFromAI");
- if(question.length<3){host.hidden=false;host.textContent="Напиши своє запитання.";return}
- if(!current)return;
- const button=$("sendQuestion");button.disabled=true;
- host.hidden=false;host.textContent="ШІ шукає пояснення…";const version=loadToken;
- try{
-  const data=await aiCall("ask-question",{text:current.text.slice(0,14700),question});
-  if(version===loadToken)explainMarkup(host,data.answer||"Відповідь недоступна.");
- }catch(error){if(version===loadToken)host.textContent=error.message}
- finally{button.disabled=false}
+function teacherThreadKey(){return lessons[lessonIndex]?.id||"general"}
+function currentTeacherThread(){
+ const thread=teacherChats[teacherThreadKey()];
+ return Array.isArray(thread)?thread:[];
+}
+function saveTeacherThread(thread,key=teacherThreadKey()){
+ teacherChats[key]=thread.slice(-32).map(m=>({
+  role:m.role==="assistant"?"assistant":"user",
+  content:String(m.content||"").slice(0,2500),
+  ...(m.context?{context:m.context}:{})
+ }));
+ const keys=Object.keys(teacherChats);
+ if(keys.length>30)for(const keyToRemove of keys.slice(0,keys.length-30))delete teacherChats[keyToRemove];
+ toStore(TEACHER_CHAT_KEY,teacherChats);
+}
+function renderTeacherMessages(){
+ const host=$("teacherMessages"),messages=currentTeacherThread();
+ host.replaceChildren();
+ if(!messages.length){
+  host.append(make("p","teacher-empty","Привіт! Запитай про події з підручника або про відповідь у тесті. Я запам’ятаю нашу розмову, і ти зможеш продовжити її пізніше."));
+ }else for(const message of messages){
+  const card=make("div","teacher-message "+(message.role==="user"?"user":"assistant"));
+  card.append(make("span","message-role",message.role==="user"?"Ти":"Учитель-ШІ"));
+  card.append(make("span",null,String(message.content||"")));
+  host.append(card);
+ }
+ host.scrollTop=host.scrollHeight;
+}
+function refreshTeacherContext(){
+ const box=$("teacherContext");
+ box.hidden=!activeTeacherQuizContext;
+ if(activeTeacherQuizContext){
+  $("teacherContextText").textContent="Обговорюємо запитання: "+activeTeacherQuizContext.question;
+ }
+}
+function setTeacherOpen(visible){
+ const panel=$("teacherPanel");
+ panel.hidden=!visible;
+ $("teacherToggle").setAttribute("aria-expanded",String(Boolean(visible)));
+ $("teacherToggle").hidden=Boolean(visible);
+ document.body.classList.toggle("teacher-open",Boolean(visible));
+ toStore(TEACHER_OPEN_KEY,Boolean(visible));
+ if(visible){renderTeacherMessages();refreshTeacherContext()}
+}
+function questionContextFromQuiz(q,result){
+ return {
+  question:String(q.question||"").slice(0,450),
+  sourcePoint:Number.isInteger(q.sourcePoint)?q.sourcePoint:(pointIndex+1),
+  ...(result?.userAnswer?{chosenAnswer:String(result.userAnswer).slice(0,250)}:{}),
+  ...(result?.status==="wrong"||result?.status==="correct"?
+   {correctAnswer:String(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"").slice(0,550)}:{}),
+  ...(q.explanation?{explanation:String(q.explanation).slice(0,450)}:{}),
+  ...(q.sourceQuote?{sourceQuote:String(q.sourceQuote).slice(0,280)}:{})
+ };
+}
+function openTeacherForQuestion(q,result){
+ activeTeacherQuizContext=questionContextFromQuiz(q,result);
+ setTeacherOpen(true);
+ $("studentQuestion").focus();
+}
+$("teacherToggle").onclick=()=>{
+ if(quizState?.questions?.[quizState.index]&&quizState?.results?.[quizState.index]&&
+    !activeTeacherQuizContext){
+  const q=quizState.questions[quizState.index];
+  activeTeacherQuizContext=questionContextFromQuiz(q,quizState.results[quizState.index]);
+ }
+ setTeacherOpen(true);
+ $("studentQuestion").focus();
 };
+$("teacherClose").onclick=()=>setTeacherOpen(false);
+$("teacherClearContext").onclick=()=>{activeTeacherQuizContext=null;refreshTeacherContext()};
+$("teacherClearHistory").onclick=()=>{
+ if(!window.confirm("Очистити історію листування для цього параграфа?"))return;
+ saveTeacherThread([]);
+ activeTeacherQuizContext=null;
+ renderTeacherMessages();refreshTeacherContext();
+};
+$("studentQuestion").addEventListener("keydown",event=>{
+ if(event.key==="Enter"&&!event.shiftKey&&!event.isComposing){
+  event.preventDefault();
+  if(!teacherBusy)sendTeacherMessage();
+ }
+});
+async function sendTeacherMessage(){
+ const field=$("studentQuestion"),text=field.value.trim();
+ if(text.length<3){field.focus();return}
+ if(teacherBusy)return;
+ const key=teacherThreadKey(),context=activeTeacherQuizContext?
+  {...activeTeacherQuizContext}:null;
+ const previous=currentTeacherThread().slice(-10);
+ const nextMessage={role:"user",content:text,...(context?{context}:{})};
+ saveTeacherThread([...previous,nextMessage],key);
+ field.value="";
+ teacherBusy=true;$("sendQuestion").disabled=true;
+ renderTeacherMessages();
+ const host=$("teacherMessages"),waiting=make("div","teacher-message assistant","Учитель-ШІ думає…");
+ host.append(waiting);host.scrollTop=host.scrollHeight;
+ try{
+  let source=current?.text||"";
+  if(context&&Number.isInteger(context.sourcePoint)){
+   try{source=(await fetchPoint(lessonIndex,context.sourcePoint-1)).text||source}catch{}
+  }else if(quizState?.mode==="review")source=quizState.sourceText||source;
+  const history=previous.map(m=>({role:m.role,content:m.content.slice(0,650)}));
+  const data=await aiCall("ask-question",{
+   text:String(source).slice(0,14500),question:text,chatHistory:history,
+   ...(context?{quizContext:context}:{})
+  },40000);
+  saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:data.answer||"Не вдалося отримати пояснення."}],key);
+ }catch(error){
+  saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:"ШІ тимчасово не відповідає: "+error.message}],key);
+ }finally{
+  teacherBusy=false;$("sendQuestion").disabled=false;
+  if(key===teacherThreadKey())renderTeacherMessages();
+ }
+}
+$("sendQuestion").onclick=sendTeacherMessage;
+const savedPanel=fromStore(TEACHER_OPEN_KEY,null);
+const largeScreen=typeof window.matchMedia==="function"&&window.matchMedia("(min-width:1400px)").matches;
+setTeacherOpen(savedPanel===null?largeScreen:Boolean(savedPanel));
+
 async function init(){
  completed=new Set(fromStore(DONE,[]));reviews=new Set(fromStore(REVIEW_DONE,[]));skipped=new Set(fromStore(SKIPPED,[]));
  locallySavedQuestions=fromStore(QUIZ_CACHE,{});pointAttempts=fromStore(ATTEMPTS,{});locallySavedReviews=fromStore(REVIEW_QUIZ_CACHE,{});
