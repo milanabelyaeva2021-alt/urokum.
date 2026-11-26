@@ -647,9 +647,19 @@ function nextPoint(){
 }
 async function fullParagraphText(){
  const lesson=lessons[lessonIndex],length=(points[lesson.id]||[]).length;
- const result=[];
- for(let i=0;i<length;i++)result.push((await fetchPoint(lessonIndex,i)).text);
- return result.join("\n\n").slice(0,14700);
+ const result=[],maxPerPoint=Math.max(650,Math.floor(14000/Math.max(length,1))-40);
+ for(let i=0;i<length;i++){
+  const source=String((await fetchPoint(lessonIndex,i)).text||"");
+  let sample=source;
+  if(source.length>maxPerPoint){
+   const head=Math.round(maxPerPoint*.76),tail=maxPerPoint-head;
+   sample=source.slice(0,head).replace(/\\s+\\S*$/,"").trim()+
+     "\\n[... продовження пункту ...]\\n"+
+     source.slice(-tail).replace(/^\\S*\\s/,"").trim();
+  }
+  result.push("Пункт "+(i+1)+":\\n"+sample);
+ }
+ return result.join("\\n\\n").slice(0,14700);
 }
 async function startParagraphReview(){
  $("finished").hidden=true;$("review").hidden=false;
