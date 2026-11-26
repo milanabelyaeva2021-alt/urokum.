@@ -600,13 +600,13 @@ app.post("/api/tutor", async (req, res) => {
     ? 'Ти уважний учитель історії. Перевір зміст письмової відповіді учня за матеріалом підручника. Враховуй синоніми, не вимагай дослівного збігу. Статус passed=true дозволений ЛИШЕ якщо відповідь фактично правильна і відповідає на поставлене запитання; якщо відповідь неповна, хибна чи не по темі — passed=false. Поверни ВИКЛЮЧНО валідний JSON без markdown: {"passed":true,"feedback":"Коротке пояснення українською: що добре і що варто уточнити (2–4 речення)."} Запитання: '+question.trim().slice(0,500)+'\\nВідповідь учня: '+studentAnswer.trim().slice(0,1800)+'\\nОрієнтовна відповідь: '+referenceAnswer.trim().slice(0,2000)
 
     : task === "paragraph-review"
-    ? 'Зроби підсумкову САМОСТІЙНУ РОБОТУ з рівно 6 різних тестових запитань українською за всім параграфом. Два на факти, два на розуміння причин і наслідків, два на узагальнення. Тільки відомості з тексту. Поверни виключно JSON {"questions":[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]}. Обов’язково 6 запитань, 4 відповіді у кожному, індекс correct 0..3.'
+    ? "Створи підсумкову САМОСТІЙНУ РОБОТУ з РІВНО 12 різних запитань українською за ВСІМ параграфом. Запитання охоплюють події, дати, діячів, історичні поняття, причини й наслідки, порівняння та узагальнення. Розподіляй запитання між усіма пунктами параграфа. ПЕРШІ 9 запитань — тестові (тип choice) з чотирма варіантами, ОСТАННІ 3 — письмові відкриті (тип open), що потребують пояснення своїми словами. Не вигадуй фактів, не повторюй запитання. Поверни виключно валідний JSON без markdown: {\"questions\":[{\"type\":\"choice\",\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":0,\"explanation\":\"чому так\"},{\"type\":\"open\",\"question\":\"...\",\"referenceAnswer\":\"коротка змістовна відповідь за текстом\"}]}. ОБОВ’ЯЗКОВО РІВНО 12 елементів: індекси 0–8 choice із correct 0..3, індекси 9–11 open з referenceAnswer."
     : task === "assess-retelling"
     ? "Ти доброзичливий учитель. Оціни переказ параграфа за наданим текстом. Спочатку відзнач 2 конкретні сильні сторони, потім 2 важливі пропущені чи переплутані факти (якщо є), а вкінці запропонуй один крок, як покращити переказ. Без вигаданих фактів і без оцінки балами. Переказ учня: " + retelling.trim().slice(0,2500)
     : task === "ask-question"
     ? "Ти уважний учитель історії. Відповідай українською зрозуміло і по суті, спираючись на текст цього пункту. Пояснюй незнайомі поняття й причинно-наслідкові зв’язки. Якщо в пункті немає достатньо відомостей, чесно зазнач це, а не вигадуй. Запитання учня: " + question.trim().slice(0,500)
     : task === "multi-checkpoint"
-    ? 'Склади РІВНО 5 запитань для активного навчання за прочитаним пунктом підручника українською: ПЕРШІ 3 запитання — з чотирма варіантами вибору; ОСТАННІ 2 — відкриті, на які учень відповідає своїми словами. Дотримуйся порядку та не вигадуй фактів поза наданим текстом. Поверни ВИКЛЮЧНО валідний JSON без markdown у форматі {"questions":[{"type":"choice","question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."},{"type":"choice","question":"...","options":["...","...","...","..."],"correct":1,"explanation":"..."},{"type":"choice","question":"...","options":["...","...","...","..."],"correct":2,"explanation":"..."},{"type":"open","question":"...","referenceAnswer":"коротка орієнтовна відповідь за текстом"},{"type":"open","question":"...","referenceAnswer":"коротка орієнтовна відповідь за текстом"}]}. Для choice correct — індекс правильної відповіді 0..3. Відкриті запитання мають вимагати пояснення причин чи порівняння, а не одного слова.'
+    ? "Створи РІВНО 5 запитань українською ТІЛЬКИ за прочитаним пунктом підручника. ПЕРШІ ЧОТИРИ запитання — тести з чотирма варіантами (тип choice), П’ЯТЕ — письмове відкрите (тип open), яке потребує пояснення причин, наслідків або своїми словами. Не вигадуй фактів. Поверни виключно валідний JSON без markdown: {\"questions\":[{\"type\":\"choice\",\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":0,\"explanation\":\"...\"},{\"type\":\"choice\",\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":1,\"explanation\":\"...\"},{\"type\":\"choice\",\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":2,\"explanation\":\"...\"},{\"type\":\"choice\",\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"correct\":3,\"explanation\":\"...\"},{\"type\":\"open\",\"question\":\"...\",\"referenceAnswer\":\"коротка змістовна орієнтовна відповідь за текстом\"}]}. РІВНО 4 тестових, потім 1 письмове."
     : task === "test"
     ? "Створи 5 тестових запитань українською за фрагментом. Для кожного дай 4 варіанти (А, Б, В, Г), вкажи правильну відповідь і коротке пояснення. Не додавай фактів поза текстом."
     : task === "checkpoint"
@@ -638,7 +638,7 @@ app.post("/api/tutor", async (req, res) => {
             signal:AbortSignal.timeout(11500),
             body:JSON.stringify({
               contents:[{role:"user",parts:[{text:input}]}],
-              generationConfig:{temperature:0.25,maxOutputTokens:3072}
+              generationConfig:{temperature:0.25,maxOutputTokens:6000}
             })
           });
           answer=await response.json();
@@ -656,7 +656,7 @@ app.post("/api/tutor", async (req, res) => {
               messages:[
                 {role:"system",content:"Ти український освітній асистент. Пояснюй лише на основі наданого навчального тексту, без вигаданих фактів."},
                 {role:"user",content:input}
-              ],temperature:0.25,max_completion_tokens:3072
+              ],temperature:0.25,max_completion_tokens:6000
             })
           });
           answer=await response.json();
@@ -690,9 +690,9 @@ app.post("/api/tutor", async (req, res) => {
         const parsed=JSON.parse(cleaned);
         if(task==="checkpoint")return res.json({quiz:parsed});
         const qs=parsed.questions;
-        if(!Array.isArray(qs)||qs.length!==(task==="paragraph-review"?6:5)||qs.some((q,i)=>{
+        if(!Array.isArray(qs)||qs.length!==(task==="paragraph-review"?12:5)||qs.some((q,i)=>{
           if(!q || typeof q.question!=="string" || q.question.trim().length<5)return true;
-          if(task==="multi-checkpoint" && i>=3){
+          if((task==="multi-checkpoint" && i>=4) || (task==="paragraph-review" && i>=9)){
             return q.type!=="open" || typeof q.referenceAnswer!=="string" || q.referenceAnswer.trim().length<8;
           }
           return !Array.isArray(q.options) || q.options.length!==4 ||
