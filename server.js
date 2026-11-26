@@ -1,5 +1,5 @@
 import express from "express";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import multer from "multer";
 import fs from "node:fs/promises";
@@ -9,9 +9,54 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.disable("x-powered-by");
+// Render runs Express behind an HTTPS reverse proxy; trust the last hop only.
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const uploadDir = path.join(__dirname, "uploads");
 await fs.mkdir(uploadDir, { recursive: true });
+
+// Bound API requests so a single visitor cannot exhaust scarce free AI credits.
+// This fixed-window counter is suitable for a single small Render instance.
+// When hosting multiple instances use a shared rate-limit store (e.g. Redis).
+const requestWindows=new Map();
+function limitRequests(group,maxCount,windowMs){
+ return (req,res,next)=>{
+  const now=Date.now();
+  const address=String(req.ip||req.socket?.remoteAddress||"anonymous");
+  const key=group+"|"+address;
+  let record=requestWindows.get(key);
+  if(!record||now>=record.expires){
+   record={count:0,expires:now+windowMs};requestWindows.set(key,record);
+  }
+  if(record.count>=maxCount){
+   res.setHeader("Retry-After",String(Math.max(1,Math.ceil((record.expires-now)/1000))));
+   return res.status(429).json({error:group==="ai"
+    ?"Забагато запитів до ШІ. Спробуй трохи пізніше — читання й готові тести доступні."
+    :"Забагато запитів. Спробуй пізніше."});
+  }
+  record.count++;
+  if(requestWindows.size>4000){
+   for(const [k,v] of requestWindows){if(v.expires<=now)requestWindows.delete(k)}
+   if(requestWindows.size>4500)requestWindows.delete(requestWindows.keys().next().value);
+  }
+  next();
+ };
+}
+// Private admin routes remain off until an admin secret is configured in Render.
+// A header token is accepted only over HTTPS on hosted deployments.
+function requireAdmin(req,res,next){
+ const expected=process.env.UROKUM_ADMIN_TOKEN;
+ const submitted=req.get("X-Urokum-Admin-Key");
+ if(!expected||expected.length<24||typeof submitted!=="string"||
+    Buffer.byteLength(expected)!==Buffer.byteLength(submitted)||
+    !timingSafeEqual(Buffer.from(expected),Buffer.from(submitted))){
+  return res.status(403).json({error:"Цю дію може виконувати лише адміністратор Урокуму."});
+ }
+ next();
+}
+const aiLimiter=limitRequests("ai",20,10*60*1000);
+const uploadLimiter=limitRequests("admin",3,60*60*1000);
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -495,9 +540,14 @@ app.get("/api/printed-book/history11-gisem-stand.pdf", async (req,res) => {
   }
 });
 app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Урокум" }));
-app.get("/api/ai-status", (_req, res) => res.json({ configured: Boolean(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY), provider: process.env.GROQ_API_KEY ? "groq" : (process.env.OPENAI_API_KEY ? "openai" : null) }));
+app.get("/api/ai-status", (_req, res) => {
+ const provider=process.env.GEMINI_API_KEY?"gemini":process.env.GROQ_API_KEY?"groq":
+  process.env.OPENROUTER_API_KEY?"openrouter":
+  (process.env.ALLOW_PAID_AI==="true"&&process.env.OPENAI_API_KEY?"openai":null);
+ res.json({configured:Boolean(provider),provider});
+});
 
-app.post("/api/upload", upload.single("pdf"), async (req, res) => {
+app.post("/api/upload", requireAdmin, uploadLimiter, upload.single("pdf"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Завантаж PDF-файл." });
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   try {
@@ -551,7 +601,7 @@ app.get("/api/book/:id", async (req, res) => {
   } catch { res.status(404).json({ error: "Підручник не знайдено." }); }
 });
 
-app.put("/api/book/:id/outline", async (req, res) => {
+app.put("/api/book/:id/outline", requireAdmin, uploadLimiter, async (req, res) => {
   try {
     const book = await readBook(req.params.id);
     const outline = req.body?.outline;
@@ -585,7 +635,7 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
 // Save generated textbook questions in memory, so repeat views do not
 // consume scarce free-tier requests. Never cache students' written answers.
 const textbookQuizCache=new Map();
-app.post("/api/tutor", async (req, res) => {
+app.post("/api/tutor", aiLimiter, async (req, res) => {
   const { text, task, question, retelling, studentAnswer, referenceAnswer } = req.body || {};
   if (task === "ask-question" && (typeof question !== "string" || question.trim().length < 3 || question.length > 500)) return res.status(400).json({error:"Напиши коротке запитання до прочитаного пункту."});
   if (task === "assess-retelling" && (typeof retelling !== "string" || retelling.trim().length < 30 || retelling.length > 2500)) return res.status(400).json({error:"Напиши переказ хоча б у кількох реченнях (до 2500 символів)."});
