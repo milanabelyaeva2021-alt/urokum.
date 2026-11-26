@@ -396,8 +396,8 @@ function finishQuiz(mode){
   $("quiz").hidden=true;showCompletion(false);
   progress();return;
  }
- reviews.add(lesson.id);toStore(REVIEW_DONE,[...reviews]);
- $("quiz").hidden=true;showReviewCompleted();
+ if(!quizState?.skipped){reviews.add(lesson.id);toStore(REVIEW_DONE,[...reviews]);}
+ $("quiz").hidden=true;showReviewCompleted(Boolean(quizState?.skipped));
 }
 function showCompletion(already){
  $("readEnd").hidden=true;
@@ -461,10 +461,10 @@ async function startParagraphReview(){
   host.append(back);
  }
 }
-function showReviewCompleted(){
+function showReviewCompleted(partial=false){
  const host=$("review");host.hidden=false;host.replaceChildren();
- host.append(make("h2",null,"Самостійну роботу завершено!"),
-  make("p","small","Результат збережено. Можеш переказати матеріал або перейти до наступного параграфа."));
+ host.append(make("h2",null,partial?"Самостійна робота завершена з пропусками":"Самостійну роботу завершено!"),
+  make("p","small",partial?"Пропущені запитання не зараховуються як правильні. Самостійну можна пройти ще раз.":"Результат збережено. Можеш переказати матеріал або перейти до наступного параграфа."));
  const actions=make("div","actions");
  const retell=make("button","secondary","Переказати параграф");
  retell.onclick=openRetelling;
