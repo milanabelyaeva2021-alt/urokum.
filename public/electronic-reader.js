@@ -27,6 +27,101 @@ function make(tag,classes,text){
  if(text!=null)node.textContent=text;
  return node;
 }
+function renderEbookBlocks(host,blocks){
+ host.replaceChildren();
+ for(const block of blocks||[]){
+  if(!block||typeof block.type!=="string")continue;
+  if(block.type==="heading"){
+   host.append(make("h2","point-heading",block.text));continue;
+  }
+  if(block.type==="text"){
+   host.append(make("p",null,block.text));continue;
+  }
+  if(block.type==="table"){
+   const wrap=make("div","ebook-table-wrap");
+   const table=make("table","ebook-table");
+   table.append(make("caption",null,block.title));
+   const thead=make("thead");
+   for(const headerRow of block.headerRows||[]){
+    const tr=make("tr");
+    for(const cellData of headerRow){
+     const cell=make("th",null,typeof cellData==="string"?cellData:cellData.text);
+     if(typeof cellData==="object"){
+      cell.colSpan=Math.max(1,Number(cellData.colSpan)||1);
+      cell.rowSpan=Math.max(1,Number(cellData.rowSpan)||1);
+     }
+     cell.scope="col";tr.append(cell);
+    }
+    thead.append(tr);
+   }
+   table.append(thead);
+   const tbody=make("tbody");
+   for(const rowData of block.rows||[]){
+    const tr=make("tr");
+    for(const value of rowData)tr.append(make("td",null,value));
+    tbody.append(tr);
+   }
+   table.append(tbody);wrap.append(table);host.append(wrap);
+   continue;
+  }
+  if(block.type==="list"){
+   const ul=make("ul","ebook-bullets");
+   for(const item of block.items||[])ul.append(make("li",null,item));
+   host.append(ul);continue;
+  }
+  if(block.type==="terms"){
+   const details=make("details","ebook-vocab");
+   details.append(make("summary",null,"📖 "+(block.title||"Словничок")));
+   const dl=make("dl");
+   for(const item of block.entries||[]){
+    dl.append(make("dt",null,item.term),make("dd",null,item.definition));
+   }
+   details.append(dl);host.append(details);continue;
+  }
+  if(block.type==="source"){
+   const details=make("details","ebook-source");
+   details.append(make("summary",null,"📜 "+(block.title||"Історичне джерело")));
+   details.append(make("p","source-caption",block.caption||""));
+   details.append(make("blockquote",null,block.text||""));
+   host.append(details);continue;
+  }
+  if(block.type==="chart"){
+   const figure=make("figure","ebook-chart");
+   figure.append(make("figcaption",null,block.title||"Діаграма"));
+   const body=make("div","ebook-chart-body");
+   const pie=make("div","ebook-pie");
+   pie.setAttribute("role","img");
+   const colors=["#7953b7","#c0a5e5","#e9dff5","#a38cc5"];
+   let sum=0;
+   const segments=[];
+   const items=make("ul");
+   for(let i=0;i<(block.series||[]).length;i++){
+    const part=block.series[i];
+    const percent=Math.min(100,Math.max(0,Number(part.percent)||0));
+    const from=sum;sum=Math.min(100,sum+percent);
+    segments.push(colors[i%colors.length]+" "+from+"% "+sum+"%");
+    const li=make("li");
+    const chip=make("span","swatch");
+    chip.style.background=colors[i%colors.length];
+    li.append(chip,make("span",null,part.name+" — "+String(percent).replace(".",",")+" %"));
+    items.append(li);
+   }
+   pie.style.background="conic-gradient("+segments.join(",")+")";
+   pie.setAttribute("aria-label",(block.series||[]).map(x=>x.name+" "+x.percent+" відсотків").join(", "));
+   body.append(pie,items);
+   figure.append(body);
+   if(block.caption)figure.append(make("p","chart-note",block.caption));
+   host.append(figure);continue;
+  }
+  if(block.type==="conclusion"){
+   const aside=make("aside","ebook-conclusion");
+   aside.append(make("h3",null,block.title||"Висновки"));
+   aside.append(make("p",null,block.text||""));
+   host.append(aside);
+  }
+ }
+}
+
 function go(node){node?.scrollIntoView({behavior:"smooth",block:"start"})}
 function flatten(list){
  for(const item of list||[]){
@@ -119,8 +214,9 @@ async function loadPoint(i,j){
     " • Сторінки оригінального видання: "+data.pages.join("–");
   $("pointNumber").textContent=String(data.point);
   $("pointLabel").textContent="Читай текст — після нього буде зупинка";
-  const host=$("ebookText");host.replaceChildren();
-  data.paragraphs.forEach(part=>host.append(make("p",null,part)));
+  const host=$("ebookText");
+  if(Array.isArray(data.blocks)&&data.blocks.length)renderEbookBlocks(host,data.blocks);
+  else{host.replaceChildren();data.paragraphs.forEach(part=>host.append(make("p",null,part)))}
   $("loading").hidden=true;$("bookShell").hidden=false;
   progress();
   const done=completed.has(lesson.id+":"+(j+1));
