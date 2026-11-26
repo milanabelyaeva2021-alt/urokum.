@@ -31,6 +31,8 @@ $("fontReset").onclick=()=>applyFontSize(19);
 $("fontLarger").onclick=()=>applyFontSize(readerFontSize+1);
 function restartParagraph(){
  const lesson=lessons[lessonIndex];if(!lesson)return;
+ if(!window.confirm("Пройти весь параграф ще раз? Позначки про завершення його пунктів буде скинуто."))return;
+ $("evidenceView").hidden=true;$("readerArticle").hidden=false;
  for(let j=0;j<(points[lesson.id]||[]).length;j++){
   completed.delete(lesson.id+":"+(j+1));skipped.delete(lesson.id+":"+(j+1));
  }
@@ -38,6 +40,7 @@ function restartParagraph(){
  $("paragraphSummary").hidden=true;
  loadPoint(lessonIndex,0);
 }
+$("restartParagraphBtn").onclick=restartParagraph;
 const PREPARED_SUMMARIES={
  p1:[
   "Другий період Новітньої історії України охоплює 1945 р. — початок XXI ст.",
@@ -354,7 +357,10 @@ async function loadPoint(i,j){
  $("bookShell").hidden=true;$("loading").hidden=false;
  $("loading").textContent="Готую електронний текст пункту "+(j+1)+"…";
  $("quiz").hidden=true;$("finished").hidden=true;$("review").hidden=true;$("paragraphSummary").hidden=true;
- const qs=$("studentQuestion");qs.value="";$("answerFromAI").hidden=true;
+ activeTeacherQuizContext=null;
+ renderTeacherMessages();
+ refreshTeacherContext();
+ $("evidenceView").hidden=true;$("readerArticle").hidden=false;
  try{
   const data=await fetchPoint(i,j);
   if(token!==loadToken)return;
@@ -488,9 +494,8 @@ function availableEvidenceQuote(q){
  const old=String(q?.explanation||q?.referenceAnswer||"").trim();
  return old.length>=30?old:"";
 }
-function revealEvidenceInText(quote){
+function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))){
  if(!quote)return false;
- const area=$("ebookText");
  // Only one clue at a time; older highlights should not remain on the page.
  for(const previous of area.querySelectorAll("mark.ebook-source-highlight")){
   previous.replaceWith(document.createTextNode(previous.textContent));
@@ -513,7 +518,7 @@ function revealEvidenceInText(quote){
   const details=el.closest("details");if(details)details.open=true;
   const back=make("div","source-back-link");
   const button=make("button","secondary","← Повернутися до запитання");
-  button.onclick=()=>go($("quiz"));back.append(button);
+  button.onclick=onBack;back.append(button);
   el.insertAdjacentElement("afterend",back);
   highlight.scrollIntoView({behavior:"smooth",block:"center"});
   return true;
@@ -598,33 +603,54 @@ function determineEvidence(q,mode){
  }
  return best;
 }
-function showEvidenceForQuestion(q,feedback,mode){
- const found=determineEvidence(q,mode);
- if(mode==="review"){
-  const point=found?.point??(Number.isInteger(q.sourcePoint)?q.sourcePoint-1:null);
-  if(point!==null && point>=0){
-   const url=new URL(location.href);
-   url.searchParams.set("paragraph",String(lessonIndex+1));
-   url.searchParams.set("point",String(point+1));
-   if(found?.quote)url.searchParams.set("find",found.quote);
-   else url.searchParams.delete("find");
-   // Real anchor also works on browsers that block window.open.
-   const link=make("a","secondary","📖 Відкрити відповідний текст");
-   link.href=url.toString();link.target="_blank";link.rel="noopener noreferrer";
-   const row=make("div","source-back-link");row.append(link);feedback.append(row);
-   link.click();
-   return;
+// Keep the quiz DOM and answers intact while showing a source from another point.
+function returnToQuizFromEvidence(){
+ $("evidenceView").hidden=true;
+ $("readerArticle").hidden=false;
+ if(quizState)$("quiz").hidden=false;
+ go($("quiz"));
+}
+$("evidenceBackTop").onclick=returnToQuizFromEvidence;
+$("evidenceBackBottom").onclick=returnToQuizFromEvidence;
+function focusEvidenceQuote(value,q){
+ const words=String(value||"").split(/\s+/u).filter(Boolean);
+ if(words.length<=20)return words.join(" ");
+ const important=evidenceTerms(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"");
+ let focus=words.findIndex(w=>evidenceTerms(w).some(t=>important.includes(t)));
+ if(focus<0)focus=Math.floor(words.length/2);
+ const start=Math.min(Math.max(0,focus-6),words.length-19);
+ return words.slice(start,start+19).join(" ");
+}
+async function showEvidenceForQuestion(q,feedback,mode){
+ const savedState=quizState,version=loadToken;
+ const length=(points[lessons[lessonIndex]?.id]||[]).length;
+ const isReview=mode==="review";
+ let found=determineEvidence(q,mode);
+ let index=isReview && Number.isInteger(q.sourcePoint) && q.sourcePoint>=1 &&
+   q.sourcePoint<=length ?q.sourcePoint-1:found?.point??pointIndex;
+ if(index<0||index>=length)index=pointIndex;
+ const box=$("evidenceView"),host=$("evidenceText");
+ host.replaceChildren(make("p","source-note","Відкриваю відповідний пункт підручника…"));
+ $("evidenceTitle").textContent="Пункт "+(index+1)+" · "+lessons[lessonIndex].title;
+ box.hidden=false;$("quiz").hidden=true;$("readerArticle").hidden=true;
+ go(box);
+ try{
+  const part=await fetchPoint(lessonIndex,index);
+  if(version!==loadToken||quizState!==savedState)return;
+  if(Array.isArray(part.blocks)&&part.blocks.length)renderEbookBlocks(host,part.blocks);
+  else{host.replaceChildren();(part.paragraphs||[]).forEach(p=>host.append(make("p",null,bookTypography(p))))}
+  // Exact quotes come from the textbook; old quizzes use the closest passage.
+  const candidate=found?.point===index?found:bestMatchingEvidence(q,part);
+  const quote=candidate?.quote?focusEvidenceQuote(candidate.quote,q):"";
+  if(!quote||!revealEvidenceInText(quote,host,returnToQuizFromEvidence)){
+   const info=make("p","source-note","Точне речення не знайдено. Переглянь текст цього пункту — відповідь у тесті збережена.");
+   host.prepend(info);
+   go(box);
   }
+ }catch(error){
+  if(version!==loadToken)return;
+  host.replaceChildren(make("p","source-note","Не вдалося відкрити текст: "+error.message));
  }
- if(found?.quote && revealEvidenceInText(found.quote))return;
- // Even if no exact wording is available, the action must move the learner to the textbook.
- const reader=$("ebookText");
- reader.scrollIntoView({behavior:"smooth",block:"start"});
- const info=make("p","source-note","Відкрила текст пункту. Знайди відповідь у матеріалі та повернися до перевірки.");
- feedback.append(info);
- const back=make("button","secondary","← Повернутися до запитання");
- back.onclick=()=>go($("quiz"));
- feedback.append(back);
 }
 function showQuestion(){
  const state=quizState;
