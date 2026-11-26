@@ -28,13 +28,6 @@ function applyFontSize(v){
 $("fontSmaller").onclick=()=>applyFontSize(readerFontSize-1);
 $("fontReset").onclick=()=>applyFontSize(19);
 $("fontLarger").onclick=()=>applyFontSize(readerFontSize+1);
-function updateRestartButton(){
- if(!lessons[lessonIndex])return;
- const count=(points[lessons[lessonIndex].id]||[]).length;
- $("restartParagraphBtn").hidden=!Array.from({length:count},(_,j)=>pointId(lessonIndex,j)).some(key=>
-   completed.has(key)||skipped.has(key)||Boolean(pointAttempts[key]));
-}
-$("restartParagraphBtn").onclick=()=>restartParagraph();
 function restartParagraph(){
  const lesson=lessons[lessonIndex];if(!lesson)return;
  for(let j=0;j<(points[lesson.id]||[]).length;j++){
@@ -322,15 +315,11 @@ async function loadPoint(i,j){
   const lesson=lessons[i];
   $("lessonEyebrow").textContent="Історія України · 11 клас · "+lesson.title.split(".")[0];
   $("lessonTitle").textContent=lesson.title;
-  $("lessonSubtitle").textContent="Електронний текст • Пункт "+data.point+" із "+data.pointCount+
-    " • Сторінки оригінального видання: "+data.pages.join("–");
-  $("pointNumber").textContent=String(data.point);
-  $("pointLabel").textContent="Читай текст — після нього буде зупинка";
   const host=$("ebookText");
   if(Array.isArray(data.blocks)&&data.blocks.length)renderEbookBlocks(host,data.blocks);
   else{host.replaceChildren();data.paragraphs.forEach(part=>host.append(make("p",null,part)))}
   $("loading").hidden=true;$("bookShell").hidden=false;
-  progress();updateRestartButton();
+  progress();
   const done=completed.has(lesson.id+":"+(j+1));
   const passed=skipped.has(lesson.id+":"+(j+1));
   $("readEnd").hidden=done||passed;
@@ -544,7 +533,7 @@ function finishQuiz(mode){
   if(hasSkipped){completed.delete(key);skipped.add(key)}
   else{skipped.delete(key);completed.add(key)}
   toStore(DONE,[...completed]);toStore(SKIPPED,[...skipped]);
-  showCompletion(false);progress();updateRestartButton();
+  showCompletion(false);progress();
   return;
  }
  if(mode==="practice"){
@@ -624,6 +613,8 @@ function showCompletion(already){
  again.onclick=startQuiz;actions.append(again);
  const length=(points[lesson.id]||[]).length;
  if(pointIndex===length-1){
+  const retryParagraph=make("button","secondary","↻ Пройти параграф знову");
+  retryParagraph.onclick=restartParagraph;actions.append(retryParagraph);
   const test=make("button","secondary","📝 Самостійна робота");
   test.onclick=startParagraphReview;
   const retell=make("button","secondary","✍️ Переказати параграф");
@@ -634,7 +625,6 @@ function showCompletion(already){
   lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓");
  forward.onclick=()=>nextPoint();actions.append(forward);
  host.append(actions);
- updateRestartButton();
  if(pointIndex===length-1)showParagraphSummary();
  else $("paragraphSummary").hidden=true;
  if(!already)go(host);
