@@ -62,8 +62,8 @@ const PREPARED_SUMMARIES={
 function firstSummarySentence(value){
  const text=String(value||"").replace(/\s+/g," ").trim();
  if(!text)return "";
- const sentence=text.match(/^(.{20,220}?[.!?])(?:\s|$)/u);
- return (sentence?sentence[1]:text.slice(0,210).replace(/\s+\S*$/,"")+"…").trim();
+ const sentence=text.replace(/\b(рр?|ст|ім)\./giu,"$1·").match(/^(.{45,240}?[.!?])(?:\s|$)/u);
+ return (sentence?sentence[1].replace(/·/g,"."):text.slice(0,220).replace(/\s+\S*$/,"")+"…").trim();
 }
 async function shortParagraphSummary(i){
  const lesson=lessons[i],key=lesson.id;
@@ -90,18 +90,23 @@ async function showParagraphSummary(){
  const version=loadToken,lessonAtStart=lessonIndex;
  host.hidden=false;host.replaceChildren();
  host.append(make("h2",null,"📚 Короткий конспект параграфа"),
-  make("p","small","Готую основні тези з підручника…"));
+  make("p","small","Готую короткий конспект за матеріалом підручника…"));
  try{
   const items=await shortParagraphSummary(lessonAtStart);
   if(version!==loadToken||lessonAtStart!==lessonIndex)return;
   host.replaceChildren();host.append(make("h2",null,"📚 Короткий конспект параграфа"));
-  const list=make("ol");
-  for(const item of items)list.append(make("li",null,item));
-  host.append(list);
-  if(!PREPARED_SUMMARIES[lesson.id]){
-   host.append(make("p","summary-footnote","Тези вибрано з тексту пунктів. Звіряй складні місця з підручником."));
+  // A synopsis reads as connected prose, not as a numbered list.
+  const paragraphs=[];
+  if(items.length){
+   const midpoint=items.length>3?Math.ceil(items.length/2):items.length;
+   paragraphs.push(items.slice(0,midpoint).join(" "));
+   if(midpoint<items.length)paragraphs.push(items.slice(midpoint).join(" "));
   }
-  if(!items.length)host.append(make("p","small","Для цього параграфа поки немає готових тез."));
+  for(const paragraph of paragraphs)host.append(make("p","summary-prose",paragraph));
+  if(!PREPARED_SUMMARIES[lesson.id]){
+   host.append(make("p","summary-footnote","Конспект автоматично складений з уривків підручника. Найважливіші факти варто звірити з оригінальним текстом."));
+  }
+  if(!items.length)host.append(make("p","small","Для цього параграфа поки немає готового конспекту."));
  }catch(error){
   if(version!==loadToken)return;
   host.replaceChildren();host.append(make("h2",null,"📚 Короткий конспект"),
@@ -349,7 +354,7 @@ async function aiCall(task,body,timeout=30000){
 }
 function validQuestion(q,index,mode="point"){
  if(!q||typeof q.question!=="string"||!q.question.trim())return false;
- if(mode==="point"&&index>=3)
+ if((mode==="point"&&index>=4)||(mode==="review"&&index>=9))
   return q.type==="open"&&typeof q.referenceAnswer==="string"&&q.referenceAnswer.trim().length>5;
  return Array.isArray(q.options)&&q.options.length===4&&
    q.options.every(x=>typeof x==="string")&&Number.isInteger(q.correct)&&q.correct>=0&&q.correct<4;
@@ -375,7 +380,7 @@ async function startQuiz(){
  $("readEnd").hidden=true;$("finished").hidden=true;$("paragraphSummary").hidden=true;
  const card=$("quiz");card.hidden=false;card.replaceChildren();
  card.append(make("span","pill","Навчальна зупинка"),make("h2",null,"Перевіримо, що ти зрозумів(ла)"));
- const status=make("p","small","ШІ готує 5 запитань: 3 з варіантами та 2 письмові.");
+ const status=make("p","small","ШІ готує 5 запитань: 4 з варіантами відповідей і 1 письмове.");
  const skip=make("button","secondary","Пропустити перевірку →");skip.onclick=skipCheckpoint;
  card.append(status,skip);go(card);
  const version=loadToken,attempt=++quizRun;
@@ -404,7 +409,7 @@ async function startQuiz(){
  }
 }
 function quizStepBar(state){
- const steps=make("ol","quizSteps");steps.style.gridTemplateColumns="repeat("+state.questions.length+",minmax(0,1fr))";
+ const steps=make("ol","quizSteps");steps.style.gridTemplateColumns="repeat("+Math.min(6,state.questions.length)+",minmax(0,1fr))";
  steps.setAttribute("aria-label","Прогрес перевірки");
  for(let i=0;i<state.questions.length;i++){
   const result=state.results?.[i];
@@ -650,13 +655,13 @@ async function startParagraphReview(){
  $("finished").hidden=true;$("review").hidden=false;
  const host=$("review");host.replaceChildren();
  host.append(make("h2",null,"Самостійна робота"),
-  make("p","small","ШІ готує 6 запитань за всім параграфом…"));
+  make("p","small","ШІ готує 12 запитань за всім параграфом: 9 тестових і 3 письмові…"));
  go(host);const version=loadToken;
  try{
   const text=await fullParagraphText();if(version!==loadToken)return;
-  const data=await aiCall("paragraph-review",{text});
+  const data=await aiCall("paragraph-review",{text},60000);
   if(version!==loadToken)return;
-  if(!Array.isArray(data.questions)||data.questions.length!==6||
+  if(!Array.isArray(data.questions)||data.questions.length!==12||
      !data.questions.every((q,i)=>validQuestion(q,i,"review")))
    throw Error("Некоректні запитання");
   quizState={questions:data.questions,index:0,mode:"review",done:0,results:[],loadVersion:loadToken,sourceText:text};
