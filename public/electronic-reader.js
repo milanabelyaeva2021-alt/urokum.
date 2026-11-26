@@ -444,6 +444,11 @@ function availableEvidenceQuote(q){
 function revealEvidenceInText(quote){
  if(!quote)return false;
  const area=$("ebookText");
+ // Only one clue at a time; older highlights should not remain on the page.
+ for(const previous of area.querySelectorAll("mark.ebook-source-highlight")){
+  previous.replaceWith(document.createTextNode(previous.textContent));
+ }
+ for(const previous of area.querySelectorAll(".source-back-link"))previous.remove();
  for(const el of area.querySelectorAll("p, li, td, dd, blockquote")){
   const literal=el.textContent||"",bounds=evidenceBounds(literal,quote);
   if(!bounds)continue;
