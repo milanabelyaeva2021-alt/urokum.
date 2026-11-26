@@ -3,10 +3,11 @@ const BOOK="history11-gisem-stand";
 const SAVE="urokum:ebook-reading:"+BOOK, DONE="urokum:ebook-finished:"+BOOK,
  REVIEW_DONE="urokum:ebook-reviews:"+BOOK, SKIPPED="urokum:ebook-skipped:"+BOOK,
  QUIZ_CACHE="urokum:ebook-quiz-cache:"+BOOK,
- ATTEMPTS="urokum:ebook-attempts:"+BOOK, FONT_SIZE="urokum:ebook-font-size:"+BOOK;
+ ATTEMPTS="urokum:ebook-attempts:"+BOOK, FONT_SIZE="urokum:ebook-font-size:"+BOOK,
+ REVIEW_QUIZ_CACHE="urokum:ebook-prepared-reviews:"+BOOK;
 let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
 let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null,quizRun=0;
-let locallySavedQuestions={},pointAttempts={},readerFontSize=19;
+let locallySavedQuestions={},locallySavedReviews={},pointAttempts={},readerFontSize=19;
 const textCache=new Map(),summaryCache=new Map();
 
 function fromStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
@@ -825,20 +826,44 @@ async function fullParagraphText(){
  }
  return result.join("\n\n").slice(0,14700);
 }
+async function preparedReviewQuestions(lesson,text){
+ const key=lesson.id;
+ // The first two lessons have editor-checked, already-written exam sheets.
+ if(key==="p1"||key==="p2"){
+  try{
+   const response=await fetch("/books/h11/review-"+key+".json");
+   if(response.ok){
+    const data=await response.json();
+    if(data.lessonId===key&&Array.isArray(data.questions)&&data.questions.length===12&&
+      data.questions.every((q,i)=>validQuestion(q,i,"review")))return data.questions;
+   }
+  }catch(error){console.warn("Prepared review load failed",error.message)}
+ }
+ // For other lessons, reuse the first valid generation instead of spending free tokens again.
+ const fromMemory=locallySavedReviews[key];
+ if(Array.isArray(fromMemory)&&fromMemory.length===12&&
+    fromMemory.every((q,i)=>validQuestion(q,i,"review")))return fromMemory;
+ const fresh=await aiCall("paragraph-review",{text},60000);
+ if(!Array.isArray(fresh.questions)||fresh.questions.length!==12||
+    !fresh.questions.every((q,i)=>validQuestion(q,i,"review")))throw Error("Некоректні запитання");
+ locallySavedReviews[key]=fresh.questions;
+ const entries=Object.entries(locallySavedReviews);
+ if(entries.length>30)locallySavedReviews=Object.fromEntries(entries.slice(-30));
+ toStore(REVIEW_QUIZ_CACHE,locallySavedReviews);
+ return fresh.questions;
+}
 async function startParagraphReview(){
  $("finished").hidden=true;$("review").hidden=false;
  const host=$("review");host.replaceChildren();
  host.append(make("h2",null,"Самостійна робота"),
-  make("p","small","ШІ готує 12 запитань за всім параграфом: 9 тестових і 3 письмові…"));
+  make("p","small","Завантажую 12 підготовлених запитань…"));
  go(host);const version=loadToken;
  try{
+  const lesson=lessons[lessonIndex];
   const text=await fullParagraphText();if(version!==loadToken)return;
-  const data=await aiCall("paragraph-review",{text},60000);
+  const questions=await preparedReviewQuestions(lesson,text);
   if(version!==loadToken)return;
-  if(!Array.isArray(data.questions)||data.questions.length!==12||
-     !data.questions.every((q,i)=>validQuestion(q,i,"review")))
-   throw Error("Некоректні запитання");
-  quizState={questions:data.questions,index:0,mode:"review",done:0,results:[],loadVersion:loadToken,sourceText:text};
+  quizState={questions,index:0,mode:"review",done:0,results:[],loadVersion:loadToken,sourceText:text};
   host.hidden=true;$("quiz").hidden=false;showQuestion();go($("quiz"));
  }catch(error){
   if(version!==loadToken)return;
@@ -897,7 +922,7 @@ $("sendQuestion").onclick=async()=>{
 };
 async function init(){
  completed=new Set(fromStore(DONE,[]));reviews=new Set(fromStore(REVIEW_DONE,[]));skipped=new Set(fromStore(SKIPPED,[]));
- locallySavedQuestions=fromStore(QUIZ_CACHE,{});pointAttempts=fromStore(ATTEMPTS,{});
+ locallySavedQuestions=fromStore(QUIZ_CACHE,{});pointAttempts=fromStore(ATTEMPTS,{});locallySavedReviews=fromStore(REVIEW_QUIZ_CACHE,{});
  applyFontSize(fromStore(FONT_SIZE,19));
  try{
   const [a,b]=await Promise.all([
