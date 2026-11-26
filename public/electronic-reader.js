@@ -749,58 +749,63 @@ function showCompletion(already){
  const lesson=lessons[lessonIndex],key=pointId();
  const incomplete=skipped.has(key)&&!completed.has(key);
  const attempt=pointAttempts[key]||null;
- host.append(make("span","finish-badge",incomplete?"ПЕРЕВІРКУ ПРОПУЩЕНО":"ПУНКТ ЗАВЕРШЕНО"),
+ const length=(points[lesson.id]||[]).length,finalPoint=pointIndex===length-1;
+ host.append(make("span","finish-badge",incomplete?"ПРОПУЩЕНО":"ЗАВЕРШЕНО"),
   make("h2",null,incomplete?"Перевірку можна пройти пізніше":"Пункт завершено!"));
  if(attempt){
-  host.append(make("div","score-big",attempt.score+" із "+attempt.total));
-  const misses=attempt.results.filter(r=>r.status!=="correct");
-  let hint=misses.length
-   ?"Потрібно повторити: "+misses.slice(0,2).map(r=>r.question).join("; ")+"."
-   :"Усі відповіді правильні!";
-  if(incomplete)hint="Перевірка містить пропущені запитання. "+hint;
-  host.append(make("p","repeat-note",hint));
- } else {
-  host.append(make("p","small","Можеш перейти далі або пройти всі п’ять запитань."));
+  const result=make("div","compact-score");
+  result.append(make("strong",null,attempt.score+" із "+attempt.total),
+   make("span",null,"правильних відповідей"));
+  host.append(result);
+  const misses=attempt.results.filter(x=>x.status!=="correct");
+  host.append(make("p","repeat-note",misses.length
+   ?"Є "+misses.length+" запитань для повторення."
+   :"Усі відповіді правильні!"));
+ }else host.append(make("p","small","Можна продовжити читання та повернутися до перевірки пізніше."));
+ const primary=make("div","completion-main-actions");
+ if(finalPoint){
+  const test=make("button","primary","📝 Самостійна робота");
+  test.onclick=startParagraphReview;primary.append(test);
  }
- const actions=make("div","actions");
+ const goNext=make("button",finalPoint?"secondary":"primary",
+  finalPoint?(lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓"):
+   "Наступний пункт →");
+ goNext.onclick=()=>nextPoint();primary.append(goNext);
+ host.append(primary);
+ const extra=make("details","completion-more");
+ extra.append(make("summary",null,"Додаткові дії"));
+ const secondary=make("div","actions");
  if(attempt){
-  const mistakes=addMistakeReview(host,attempt);
+  const mistakes=addMistakeReview(extra,attempt);
   const reviewButton=make("button","secondary","Переглянути помилки");
   reviewButton.onclick=()=>{
    mistakes.hidden=!mistakes.hidden;
    reviewButton.textContent=mistakes.hidden?"Переглянути помилки":"Сховати помилки";
    if(!mistakes.hidden)go(mistakes);
   };
-  actions.append(reviewButton);
-  const indices=attempt.results.map((r,i)=>r.status==="correct"?-1:i).filter(i=>i>=0);
-  if(indices.length&&indices.every(i=>attempt.questions?.[i])){
+  secondary.append(reviewButton);
+  const missedIndices=attempt.results.map((r,i)=>r.status==="correct"?-1:i).filter(i=>i>=0);
+  if(missedIndices.length&&missedIndices.every(i=>attempt.questions?.[i])){
    const practice=make("button","secondary","Повторити складне");
    practice.onclick=()=>{
-    quizState={questions:indices.map(i=>attempt.questions[i]),index:0,mode:"practice",
-     done:0,results:[],loadVersion:loadToken};
+    quizState={questions:missedIndices.map(i=>attempt.questions[i]),index:0,
+     mode:"practice",done:0,results:[],loadVersion:loadToken};
     host.hidden=true;$("paragraphSummary").hidden=true;$("quiz").hidden=false;
     showQuestion();go($("quiz"));
    };
-   actions.append(practice);
+   secondary.append(practice);
   }
  }
- const again=make("button","secondary","↻ Пройти пункт ще раз");
- again.onclick=startQuiz;actions.append(again);
- const length=(points[lesson.id]||[]).length;
- if(pointIndex===length-1){
+ const again=make("button","secondary",incomplete?"Пройти 5 запитань":"↻ Пройти пункт ще раз");
+ again.onclick=startQuiz;secondary.append(again);
+ if(finalPoint){
   const retryParagraph=make("button","secondary","↻ Пройти параграф знову");
-  retryParagraph.onclick=restartParagraph;actions.append(retryParagraph);
-  const test=make("button","secondary","📝 Самостійна робота");
-  test.onclick=startParagraphReview;
+  retryParagraph.onclick=restartParagraph;secondary.append(retryParagraph);
   const retell=make("button","secondary","✍️ Переказати параграф");
-  retell.onclick=openRetelling;
-  actions.append(test,retell);
+  retell.onclick=openRetelling;secondary.append(retell);
  }
- const forward=make("button","primary",pointIndex<length-1?"Наступний пункт →":
-  lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓");
- forward.onclick=()=>nextPoint();actions.append(forward);
- host.append(actions);
- if(pointIndex===length-1)showParagraphSummary();
+ extra.append(secondary);host.append(extra);
+ if(finalPoint)showParagraphSummary();
  else $("paragraphSummary").hidden=true;
  if(!already)go(host);
 }
