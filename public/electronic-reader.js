@@ -146,6 +146,14 @@ $("importProgressFile").onchange=async()=>{
  finally{input.value=""}
 };
 
+// Presentation-only typography: textbook JSON and source evidence stay intact.
+function bookTypography(value){
+ return String(value||"")
+   .replace(/(\b\d{1,4})\s+(рр?\.|ст\.|тис\.)(?=\s|[),;.!?]|$)/gu,"$1\u00a0$2")
+   .replace(/(\d+(?:[,.]\d+)?)\s+(%)(?=\s|[),;.!?]|$)/gu,"$1\u00a0$2")
+   .replace(/(\b\d{4})\s*[—–-]\s*(\d{4}\b)/gu,"$1\u2060—\u2060$2");
+}
+
 const safeText=value=>String(value||"").replace(/[\u00ad\u200b\ufeff]/g,"").replace(/\s+/g," ").trim();
 function explainMarkup(root,text){
  root.replaceChildren();
@@ -170,10 +178,10 @@ function renderEbookBlocks(host,blocks){
  for(const block of blocks||[]){
   if(!block||typeof block.type!=="string")continue;
   if(block.type==="heading"){
-   host.append(make("h2","point-heading",block.text));continue;
+   host.append(make("h2","point-heading",bookTypography(block.text)));continue;
   }
   if(block.type==="text"){
-   host.append(make("p",null,block.text));continue;
+   host.append(make("p",null,bookTypography(block.text)));continue;
   }
   if(block.type==="table"){
    const wrap=make("div","ebook-table-wrap");
@@ -204,7 +212,7 @@ function renderEbookBlocks(host,blocks){
   }
   if(block.type==="list"){
    const ul=make("ul","ebook-bullets");
-   for(const item of block.items||[])ul.append(make("li",null,item));
+   for(const item of block.items||[])ul.append(make("li",null,bookTypography(item)));
    host.append(ul);continue;
   }
   if(block.type==="terms"){
@@ -212,21 +220,21 @@ function renderEbookBlocks(host,blocks){
    details.append(make("summary",null,"📖 "+(block.title||"Словничок")));
    const dl=make("dl");
    for(const item of block.entries||[]){
-    dl.append(make("dt",null,item.term),make("dd",null,item.definition));
+    dl.append(make("dt",null,item.term),make("dd",null,bookTypography(item.definition)));
    }
    details.append(dl);host.append(details);continue;
   }
   if(block.type==="note"){
    const details=make("details","ebook-fact");
    details.append(make("summary",null,"✨ "+(block.title||"Цікавий факт")));
-   details.append(make("p",null,block.text||""));
+   details.append(make("p",null,bookTypography(block.text||"")));
    host.append(details);continue;
   }
   if(block.type==="source"){
    const details=make("details","ebook-source");
    details.append(make("summary",null,"📜 "+(block.title||"Історичне джерело")));
    details.append(make("p","source-caption",block.caption||""));
-   details.append(make("blockquote",null,block.text||""));
+   details.append(make("blockquote",null,bookTypography(block.text||"")));
    host.append(details);continue;
   }
   if(block.type==="chart"){
