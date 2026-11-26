@@ -1,13 +1,20 @@
 const $=id=>document.getElementById(id);
 const BOOK="history11-gisem-stand";
 const SAVE="urokum:ebook-reading:"+BOOK, DONE="urokum:ebook-finished:"+BOOK,
- REVIEW_DONE="urokum:ebook-reviews:"+BOOK, SKIPPED="urokum:ebook-skipped:"+BOOK;
+ REVIEW_DONE="urokum:ebook-reviews:"+BOOK, SKIPPED="urokum:ebook-skipped:"+BOOK,
+ QUIZ_CACHE="urokum:ebook-quiz-cache:"+BOOK;
 let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
-let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null;
+let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null,quizRun=0;
+let locallySavedQuestions={};
 const textCache=new Map();
 
 function fromStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
 function toStore(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch{}}
+function lessonQuizKey(){
+ let n=5381,text=String(current?.text||"");
+ for(let i=0;i<text.length;i++)n=(((n<<5)+n)^text.charCodeAt(i))>>>0;
+ return lessons[lessonIndex].id+":"+(pointIndex+1)+":"+n.toString(16)+":"+text.length;
+}
 const safeText=value=>String(value||"").replace(/[\u00ad\u200b\ufeff]/g,"").replace(/\s+/g," ").trim();
 function explainMarkup(root,text){
  root.replaceChildren();
@@ -196,7 +203,7 @@ async function loadPoint(i,j){
  if(!lessons[i])return;
  const length=(points[lessons[i].id]||[]).length;
  if(j<0||j>=length)return;
- const token=++loadToken;
+ const token=++loadToken;quizRun++;
  lessonIndex=i;pointIndex=j;current=null;quizState=null;
  storeLocation();
  $("bookShell").hidden=true;$("loading").hidden=false;
@@ -253,29 +260,39 @@ function skipCheckpoint(){
  if(!current)return;
  const key=lessons[lessonIndex].id+":"+(pointIndex+1);
  if(!completed.has(key)){skipped.add(key);toStore(SKIPPED,[...skipped]);}
- quizState=null;
+ quizState=null;quizRun++;
  $("quiz").hidden=true;$("review").hidden=true;
  showCompletion(false);progress();
 }
 async function startQuiz(){
  if(!current)return;
- $("readEnd").hidden=true;
+ const cacheKey=lessonQuizKey(),cached=locallySavedQuestions[cacheKey];
+ if(Array.isArray(cached)&&cached.length===5&&cached.every((q,i)=>validQuestion(q,i,"point"))){
+  $("readEnd").hidden=true;$("finished").hidden=true;$("quiz").hidden=false;
+  quizState={questions:cached,index:0,mode:"point",done:0};
+  showQuestion();go($("quiz"));return;
+ }
+ $("readEnd").hidden=true;$("finished").hidden=true;
  const card=$("quiz");card.hidden=false;card.replaceChildren();
  card.append(make("span","pill","Навчальна зупинка"),make("h2",null,"Перевіримо, що ти зрозумів(ла)"));
  const status=make("p","small","ШІ готує 5 запитань: 3 з варіантами та 2 письмові.");
  const skip=make("button","secondary","Пропустити перевірку →");skip.onclick=skipCheckpoint;
  card.append(status,skip);go(card);
- const version=loadToken;
+ const version=loadToken,attempt=++quizRun;
  try{
   const response=await aiCall("multi-checkpoint",{text:current.text.slice(0,14700)});
-  if(version!==loadToken)return;
+  if(version!==loadToken||attempt!==quizRun)return;
   if(!Array.isArray(response.questions)||response.questions.length!==5||
      !response.questions.every((q,i)=>validQuestion(q,i,"point")))
    throw Error("Отримано некоректний формат запитань");
   quizState={questions:response.questions,index:0,mode:"point",done:0};
+  locallySavedQuestions[cacheKey]=response.questions;
+  const entries=Object.entries(locallySavedQuestions);
+  if(entries.length>140)locallySavedQuestions=Object.fromEntries(entries.slice(-140));
+  toStore(QUIZ_CACHE,locallySavedQuestions);
   showQuestion();
  }catch(error){
-  if(version!==loadToken)return;
+  if(version!==loadToken||attempt!==quizRun)return;
   card.replaceChildren();
   card.append(make("h2",null,"ШІ зараз недоступний"),
     make("p","small",error.message));
@@ -492,6 +509,7 @@ $("sendQuestion").onclick=async()=>{
 };
 async function init(){
  completed=new Set(fromStore(DONE,[]));reviews=new Set(fromStore(REVIEW_DONE,[]));skipped=new Set(fromStore(SKIPPED,[]));
+ locallySavedQuestions=fromStore(QUIZ_CACHE,{});
  try{
   const [a,b]=await Promise.all([
    fetch("/books/h11/outline.json",{cache:"no-store"}),
