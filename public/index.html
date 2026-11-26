@@ -5,10 +5,27 @@
 <title>Урокум — інтерактивний підручник</title>
 <style>
 :root{font-family:Inter,Arial,sans-serif;color:#242238;background:#f6f4fa;font-synthesis:none}*{box-sizing:border-box}body{margin:0}.top{background:#29243d;color:#fff;padding:19px max(22px,calc((100% - 1160px)/2));display:flex;align-items:center;justify-content:space-between}.logo{font-size:27px;font-weight:850;letter-spacing:-1px}.logo span{color:#c5a9ff}.top small{color:#d5cfe4}main{max-width:1160px;margin:30px auto;padding:0 20px}.panel{background:#fff;border:1px solid #e8e3f0;border-radius:20px;padding:26px;box-shadow:0 8px 28px #30234b0b}h1{font-size:clamp(26px,4vw,37px);margin:0 0 9px}h2{font-size:21px;margin:24px 0 12px}h3{margin:0 0 10px}.muted{color:#77748a;line-height:1.55}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:11px;margin-top:20px}button,.tile{border:1px solid #ded7eb;background:#fff;border-radius:12px;padding:13px;cursor:pointer;color:#302a45;font-size:15px;text-align:left;transition:.15s}button:hover,.tile:hover{border-color:#8a69c5;background:#faf8ff}.primary{background:#6544a3;color:white;border:0;text-align:center}.primary:hover{background:#513487;color:white}.back{border:0;background:transparent;color:#6544a3;padding:5px 0 15px}.hidden{display:none!important}.book{padding:17px;border:1px solid #e5dfef;border-radius:14px;margin:11px 0;display:flex;align-items:center;justify-content:space-between;gap:14px}.book p{margin:5px 0 0}.book button{white-space:nowrap}.tag{display:inline-block;padding:5px 9px;border-radius:20px;background:#f0eafa;color:#6544a3;font-size:12px;margin-bottom:8px}.status{margin-top:12px;color:#6b548d;line-height:1.5}.field{display:grid;gap:7px;margin:12px 0}.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid #ded7eb;border-radius:10px;font:inherit}.actions{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}.reader-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:17px;margin-top:18px}.reader-main{min-width:0}.toc{border:1px solid #e8e3f0;border-radius:14px;padding:15px;max-height:760px;overflow:auto;align-self:start;position:sticky;top:12px}.toc-item{display:block;width:100%;padding:10px;margin:5px 0;text-align:left;font-size:14px;line-height:1.35}.toc-item.child{padding-left:23px;color:#625b70}.toc-empty{color:#77748a;font-size:14px;line-height:1.55}.toc-tools{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.toc-tools button{font-size:13px;padding:8px}.pdf-toolbar{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;background:#302a45;color:white;padding:10px 12px;border-radius:12px 12px 0 0}.pdf-toolbar button{padding:8px 11px;text-align:center}.page-controls{display:flex;align-items:center;gap:7px}.page-controls input{width:65px;padding:8px;border:1px solid #ddd;border-radius:8px;text-align:center;font-size:15px}.pdf-frame{width:100%;height:min(75vh,850px);min-height:460px;border:1px solid #ddd;border-top:0;border-radius:0 0 12px 12px;background:#ebe9ef}.reader-note{font-size:13px;color:#77748a}.text-box{white-space:pre-wrap;line-height:1.7;background:#faf9fc;padding:16px;border-radius:12px;max-height:330px;overflow:auto}.lesson{border:1px solid #e6def2;border-radius:15px;padding:17px;margin-top:16px}.lesson-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.checkpoint{background:#f5f0fc;border-radius:13px;padding:16px;margin-top:14px}.checkpoint label{display:block;padding:9px;border:1px solid #e2d9ef;border-radius:9px;margin:7px 0;cursor:pointer}.checkpoint input{margin-right:8px}.feedback{font-weight:650;margin-top:10px}.modal-edit{background:#faf9fc;padding:14px;border-radius:12px;margin-top:12px}.small{font-size:13px;color:#77748a}.empty{padding:18px;border:1px dashed #d8cde8;border-radius:12px;color:#77748a;line-height:1.5}@media(max-width:800px){main{margin:18px auto}.panel{padding:17px}.top{padding:17px 20px}.reader-layout{grid-template-columns:1fr}.toc{position:static;max-height:310px;order:2}.pdf-frame{height:62vh;min-height:360px}.book{align-items:flex-start;flex-direction:column}}
+
+.logo{display:flex;align-items:center;gap:12px}
+.index-logo-mark{display:grid;place-items:center;width:36px;height:41px;flex:none;clip-path:polygon(24% 0,76% 0,100% 25%,100% 75%,76% 100%,24% 100%,0 75%,0 25%);background:#ffc414;color:#211731!important;font:900 24px/1 Inter,Arial,sans-serif}
+.index-logo-text{color:#fff!important;font-size:27px;font-weight:850}
+.book{display:grid;grid-template-columns:88px minmax(0,1fr) auto;align-items:center;gap:17px;border-radius:17px;padding:18px;background:#fff}
+.book-card-available{border:1.5px solid #9978d5;box-shadow:0 7px 24px #5d3e9712}
+.book-card-pending{background:#fbf9fd;border-color:#ddd6e9}
+.book-cover-art{width:88px;height:114px;border-radius:12px 17px 17px 12px;background:linear-gradient(115deg,#8b68d9 0 12%,#b398fb 12% 100%);box-shadow:inset 6px 0 0 #7553b3,4px 7px 14px #5b479925;display:grid;place-items:center;color:#291a43;text-align:center;padding:9px}
+.book-cover-art span{font-size:17px;font-weight:850;line-height:1.15}
+.book-details{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.book-details b{font-size:18px;line-height:1.35;color:#29233d}
+.book-details p{font-size:13px;line-height:1.5;margin:0}
+.book-state{display:inline-block;padding:5px 10px;border-radius:9px;background:#f0eafa;color:#6544a3;font-size:12px;font-weight:800;letter-spacing:.03em}
+.book-card-pending .book-cover-art{filter:grayscale(.25);opacity:.65}
+.book-card-pending .book-state{background:#eeeaf2;color:#8c819b}
+.book .primary{white-space:normal;text-align:center;line-height:1.3;padding:13px}
+@media(max-width:660px){.book{grid-template-columns:75px minmax(0,1fr);gap:12px;padding:13px}.book-cover-art{width:75px;height:98px}.book-cover-art span{font-size:15px}.book-details b{font-size:16px}.book .primary{grid-column:1/-1;width:100%}.top{gap:10px}.top small{font-size:12px}}
 </style>
 </head>
 <body>
-<header class="top"><div class="logo">Уро<span>кум</span></div><small>Читай · розумій · перевіряй себе</small></header>
+<header class="top"><div class="logo"><span class="index-logo-mark" aria-hidden="true">U</span><span class="index-logo-text">Урокум</span></div><small>Читай · розумій · перевіряй себе</small></header>
 <main>
 <section id="home" class="panel"><span class="tag">ІНТЕРАКТИВНИЙ ПІДРУЧНИК</span><h1>Що будемо вивчати?</h1><p class="muted">Обери клас, щоб перейти до предметів і потрібного видання.</p><div id="continueBook" class="empty hidden" style="margin-top:17px"></div><h2>Клас</h2><div class="grid" id="grades"></div></section>
 <section id="subjects" class="panel hidden"><button class="back" onclick="show('home')">← До класів</button><h1 id="subjectTitle"></h1><p class="muted">Обери предмет.</p><div class="grid" id="subjectGrid"></div></section>
@@ -62,17 +79,22 @@ async function chooseSubject(s){
  return
 }
   for(const x of books){
-   const wrapper=document.createElement('div');wrapper.className='book';
-   const info=document.createElement('div');
-   const heading=document.createElement('b');heading.textContent=x.title+' · '+x.author;
+   const wrapper=document.createElement('div');wrapper.className='book'+(x.available?' book-card-available':' book-card-pending');
+   const cover=document.createElement('div');cover.className='book-cover-art';
+   const coverTitle=document.createElement('span');coverTitle.textContent=(x.subject||'Історія')+' '+x.grade;
+   cover.append(coverTitle);
+   const info=document.createElement('div');info.className='book-details';
+   const heading=document.createElement('b');heading.textContent=x.title;
    const subtitle=document.createElement('p');subtitle.className='muted';
-   subtitle.textContent=x.level+(x.year?' · '+x.year:'')+(x.demo?' · Навчальний приклад':'');
-   info.append(heading,subtitle);
+   subtitle.textContent=x.author+' · '+(x.year||'')+' · рівень: '+(x.level||'стандарт');
+   const state=document.createElement('span');state.className='book-state';
+   state.textContent=x.available?'ЕЛЕКТРОННА ВЕРСІЯ':'ГОТУЄТЬСЯ';
+   info.append(heading,subtitle,state);
    const button=document.createElement('button');button.className='primary';
-   button.textContent=x.available?'Читати електронний підручник':'Електронна версія готується';
+   button.textContent=x.available?'Читати підручник':'Ще недоступний';
    button.disabled=!x.available;
    if(x.available)button.onclick=()=>{preserveState();location.href=(x.mode==='printed'?'/electronic-reader.html?id=':'/e-reader.html?id=')+encodeURIComponent(x.id)};
-   wrapper.append(info,button);list.append(wrapper);
+   wrapper.append(cover,info,button);list.append(wrapper);
   }
  }catch(error){list.replaceChildren();const msg=document.createElement('div');msg.className='empty';msg.textContent='Не вдалося завантажити електронний каталог: '+error.message;list.append(msg)}
 }
