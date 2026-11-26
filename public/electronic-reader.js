@@ -1,9 +1,9 @@
 const $=id=>document.getElementById(id);
 const BOOK="history11-gisem-stand";
 const SAVE="urokum:ebook-reading:"+BOOK, DONE="urokum:ebook-finished:"+BOOK,
- REVIEW_DONE="urokum:ebook-reviews:"+BOOK;
+ REVIEW_DONE="urokum:ebook-reviews:"+BOOK, SKIPPED="urokum:ebook-skipped:"+BOOK;
 let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
-let completed=new Set(),reviews=new Set(),quizState=null;
+let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null;
 const textCache=new Map();
 
 function fromStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
@@ -173,7 +173,7 @@ function progress(){
  const lesson=lessons[lessonIndex],length=(points[lesson.id]||[]).length;
  $("progressName").textContent=lesson.title;
  $("progressStep").textContent="Пункт "+(pointIndex+1)+" / "+length;
- const n=completed.has(lesson.id+":"+(pointIndex+1))?pointIndex+1:pointIndex;
+ const n=(completed.has(lesson.id+":"+(pointIndex+1))||skipped.has(lesson.id+":"+(pointIndex+1)))?pointIndex+1:pointIndex;
  $("progressFill").style.width=(100*n/Math.max(1,length))+"%";
  document.querySelectorAll(".tocItem").forEach(button=>
   button.classList.toggle("current",Number(button.dataset.lesson)===lessonIndex));
@@ -220,8 +220,9 @@ async function loadPoint(i,j){
   $("loading").hidden=true;$("bookShell").hidden=false;
   progress();
   const done=completed.has(lesson.id+":"+(j+1));
-  $("readEnd").hidden=done;
-  if(done)showCompletion(true);
+  const passed=skipped.has(lesson.id+":"+(j+1));
+  $("readEnd").hidden=done||passed;
+  if(done||passed)showCompletion(true);
   const url=new URL(location.href);url.searchParams.set("id",BOOK);
   url.searchParams.set("paragraph",String(i+1));url.searchParams.set("point",String(j+1));
   history.replaceState(null,"",url.pathname+url.search);
@@ -247,13 +248,23 @@ function validQuestion(q,index,mode="point"){
    q.options.every(x=>typeof x==="string")&&Number.isInteger(q.correct)&&q.correct>=0&&q.correct<4;
 }
 $("beginQuiz").onclick=()=>startQuiz();
+$("skipAllQuiz").onclick=()=>skipCheckpoint();
+function skipCheckpoint(){
+ if(!current)return;
+ const key=lessons[lessonIndex].id+":"+(pointIndex+1);
+ if(!completed.has(key)){skipped.add(key);toStore(SKIPPED,[...skipped]);}
+ quizState=null;
+ $("quiz").hidden=true;$("review").hidden=true;
+ showCompletion(false);progress();
+}
 async function startQuiz(){
  if(!current)return;
  $("readEnd").hidden=true;
  const card=$("quiz");card.hidden=false;card.replaceChildren();
  card.append(make("span","pill","Навчальна зупинка"),make("h2",null,"Перевіримо, що ти зрозумів(ла)"));
  const status=make("p","small","ШІ готує 5 запитань: 3 з варіантами та 2 письмові.");
- card.append(status);go(card);
+ const skip=make("button","secondary","Пропустити перевірку →");skip.onclick=skipCheckpoint;
+ card.append(status,skip);go(card);
  const version=loadToken;
  try{
   const response=await aiCall("multi-checkpoint",{text:current.text.slice(0,14700)});
@@ -271,7 +282,8 @@ async function startQuiz(){
   const retry=make("button","primary","Спробувати знову");retry.onclick=startQuiz;
   const back=make("button","secondary","Повернутися до тексту");
   back.onclick=()=>{card.hidden=true;$("readEnd").hidden=false};
-  card.append(retry,back);
+  const skip=make("button","secondary","Пропустити перевірку →");skip.onclick=skipCheckpoint;
+  card.append(retry,back,skip);
  }
 }
 function showQuestion(){
@@ -290,6 +302,14 @@ function showQuestion(){
   state.index++;
   if(state.index===state.questions.length){finishQuiz(state.mode);return}
   showQuestion();go($("quiz"));
+ };
+ const skipOne=make("button","secondary",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");
+ skipOne.onclick=()=>{
+  if(verified)return;
+  verified=true;state.skipped=(state.skipped||0)+1;
+  state.index++;
+  if(state.index===state.questions.length)finishQuiz(state.mode);
+  else{showQuestion();go($("quiz"))}
  };
  const acceptAnswer=(message,correct)=>{
   if(verified)return;
@@ -323,7 +343,7 @@ function showQuestion(){
     acceptAnswer("Зв’язок із ШІ перервався. Орієнтовна відповідь: "+q.referenceAnswer,false);
    }
   };
-  card.append(hint,input,check,feedback);return;
+  card.append(hint,input,check,skipOne,feedback);return;
  }
  let chosen=-1;
  const answers=make("div","answers");
@@ -348,12 +368,14 @@ function showQuestion(){
   check.disabled=true;
   acceptAnswer((chosen===q.correct?"Правильно! ":"Не зовсім. ")+(q.explanation||""),chosen===q.correct);
  };
- card.append(answers,check,feedback);
+ card.append(answers,check,skipOne,feedback);
 }
 function finishQuiz(mode){
  const lesson=lessons[lessonIndex];
  if(mode==="point"){
-  completed.add(lesson.id+":"+(pointIndex+1));toStore(DONE,[...completed]);
+  const key=lesson.id+":"+(pointIndex+1);
+  if(quizState?.skipped){skipped.add(key);toStore(SKIPPED,[...skipped]);}
+  else{skipped.delete(key);toStore(SKIPPED,[...skipped]);completed.add(key);toStore(DONE,[...completed]);}
   $("quiz").hidden=true;showCompletion(false);
   progress();return;
  }
@@ -363,19 +385,26 @@ function finishQuiz(mode){
 function showCompletion(already){
  $("readEnd").hidden=true;
  const host=$("finished");host.hidden=false;host.replaceChildren();
- host.append(make("div","doneIcon","✓"),make("h2",null,already?"Цей пункт уже пройдено":"Пункт завершено!"),
-   make("p","small",already?"Результат збережено.":"Відповіді перевірені. Ти можеш продовжити читання."));
+ const lesson=lessons[lessonIndex],key=lesson.id+":"+(pointIndex+1);
+ const incomplete=skipped.has(key)&&!completed.has(key);
+ host.append(make("div","doneIcon",incomplete?"↪":"✓"),
+  make("h2",null,incomplete?"Перевірку пропущено":"Пункт завершено!"),
+  make("p","small",incomplete
+   ?"Можеш перейти далі без відповіді на запитання. Перевірку можна пройти пізніше."
+   :already?"Результат збережено.":"Відповіді перевірені. Ти можеш продовжити читання."));
  const actions=make("div","actions");
- const lesson=lessons[lessonIndex],length=(points[lesson.id]||[]).length;
+ if(incomplete){
+  const retry=make("button","secondary","Пройти перевірку пізніше");
+  retry.onclick=startQuiz;actions.append(retry);
+ }
+ const length=(points[lesson.id]||[]).length;
  if(pointIndex===length-1){
-  const test=make("button","secondary","📝 Самостійна робота");
-  test.onclick=startParagraphReview;
-  const retell=make("button","secondary","✍️ Переказати параграф");
-  retell.onclick=openRetelling;
+  const test=make("button","secondary","📝 Самостійна робота");test.onclick=startParagraphReview;
+  const retell=make("button","secondary","✍️ Переказати параграф");retell.onclick=openRetelling;
   actions.append(test,retell);
  }
  const goNext=make("button","primary",pointIndex<length-1?"Наступний пункт →":
-   lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓");
+  lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓");
  goNext.onclick=()=>nextPoint();
  actions.append(goNext);host.append(actions);
  if(!already)go(host);
@@ -462,7 +491,7 @@ $("sendQuestion").onclick=async()=>{
  finally{button.disabled=false}
 };
 async function init(){
- completed=new Set(fromStore(DONE,[]));reviews=new Set(fromStore(REVIEW_DONE,[]));
+ completed=new Set(fromStore(DONE,[]));reviews=new Set(fromStore(REVIEW_DONE,[]));skipped=new Set(fromStore(SKIPPED,[]));
  try{
   const [a,b]=await Promise.all([
    fetch("/books/h11/outline.json",{cache:"no-store"}),
