@@ -164,6 +164,31 @@ h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;marg
 .source-back-link{margin:12px 0 0;display:flex;flex-wrap:wrap;gap:9px}
 .source-note{font-size:13px;line-height:1.55;color:var(--muted);margin-top:8px}
 mark.ebook-source-highlight{transition:background-color .2s}
+
+/* Minimal completed-point UI: learn first, optional actions second. */
+.completion{padding:22px 25px;border-color:var(--line);box-shadow:0 5px 20px -19px #321f58}
+.completion::before{display:none!important;content:none!important}
+.completion .finish-badge{background:var(--greenSoft);color:var(--green);font-size:11px;letter-spacing:.035em;margin:0 0 11px}
+.completion h2{margin:0 0 9px;font-size:22px}
+.compact-score{display:flex;align-items:baseline;flex-wrap:wrap;gap:9px;margin:6px 0 7px}
+.compact-score strong{font:850 clamp(27px,4.2vw,37px)/1.2 var(--ui);color:var(--ink)}
+.compact-score span{font-size:13px;color:var(--muted)}
+.completion .repeat-note{margin:4px 0 15px;color:var(--muted);font-size:14px}
+.completion-main-actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 8px}
+.completion-main-actions button{flex:1 1 190px}
+.completion-more{border-top:1px solid var(--line);margin-top:15px;padding-top:11px}
+.completion-more>summary{cursor:pointer;color:var(--green);font-weight:750;font-size:14px;list-style:revert}
+.completion-more .actions{margin:14px 0 0}
+.completion-more .actions button{flex:1 1 220px}
+.completion-more .review-errors{margin-top:13px}
+.paragraph-summary{background:var(--card);padding:0;margin:12px 0;border-color:var(--line);box-shadow:none}
+.synopsis-toggle{padding:15px 20px}
+.synopsis-toggle>summary{cursor:pointer;color:var(--green);font-weight:800;font-size:15px}
+.synopsis-content{padding:14px 0 2px}
+.synopsis-content .summary-prose{font-size:15px;line-height:1.77;margin:0 0 14px;color:var(--ink)}
+.synopsis-content .summary-footnote{font-size:11px;color:var(--muted)}
+.source-back-link a.secondary{display:inline-flex;align-items:center;text-decoration:none;min-height:42px;font-weight:750}
+@media(max-width:650px){.completion{padding:18px}.completion-main-actions button{flex:1 1 100%}.synopsis-toggle{padding:14px 16px}}
 </style>
 </head>
 <body>
