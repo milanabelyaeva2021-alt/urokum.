@@ -482,25 +482,103 @@ function findEvidencePoint(quote){
  }
  return null;
 }
+// Recover a textbook location even for questions cached before sourceQuote was added.
+// We score individual text passages using the question AND its correct answer.
+// If confidence is too low, jump to the reading passage without a false highlight.
+const evidenceStopWords=new Set(("який яка які яке коли куди чому для через після перед було були була були буде років року роках року час який чим що хто як це цей цих при між через про свою своєї своїх до від над під із та або і не на у в за по його їх вона вони має мала підручник текст параграф пункт українa україни україні український україна урср срср якій котрий тієї часів вкажи назви поясни правильну відповідь відповідний історії історичний під час").split(/\s+/u));
+function evidenceTerms(text){
+ const output=new Set();
+ for(const token of String(text||"").toLocaleLowerCase("uk").match(/[\p{L}\p{N}]+/gu)||[]){
+  if(token.length<4 && !/^\d{3,4}$/u.test(token))continue;
+  if(evidenceStopWords.has(token))continue;
+  output.add(/^\d/u.test(token)?token:token.slice(0,Math.min(6,token.length)));
+ }
+ return [...output];
+}
+function evidencePassages(part){
+ const blocks=part?.blocks||[];
+ const collected=[];
+ for(const b of blocks){
+  if(["text","source","note","conclusion"].includes(b.type))collected.push(b.text||"");
+  if(b.type==="list")collected.push(...(b.items||[]));
+  if(b.type==="table")collected.push(...(b.rows||[]).flat().map(String));
+  if(b.type==="terms")collected.push(...(b.entries||[]).map(x=>x.term+" "+x.definition));
+ }
+ if(!collected.length)collected.push(...(part?.paragraphs||[]));
+ return collected.filter(x=>String(x).trim().length>25);
+}
+function bestMatchingEvidence(q,part){
+ const expectedAnswer=q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"";
+ const strong=evidenceTerms(expectedAnswer),question=evidenceTerms(q.question);
+ const explanation=evidenceTerms(q.explanation||"");
+ let best=null;
+ for(const content of evidencePassages(part)){
+  const words=[...content.matchAll(/\S+/gu)];
+  if(words.length<5)continue;
+  for(let left=0;left<words.length;left+=words.length>45?6:words.length){
+   const right=Math.min(words.length,left+Math.min(40,words.length));
+   const fragment=content.slice(words[left].index,words[right-1].index+words[right-1][0].length);
+   const tokens=new Set(evidenceTerms(fragment));
+   const strongMatches=strong.filter(t=>tokens.has(t)).length;
+   const qMatches=question.filter(t=>tokens.has(t)).length;
+   const otherMatches=explanation.filter(t=>tokens.has(t)).length;
+   const score=strongMatches*3+qMatches*1.5+Math.min(2,otherMatches)*.35;
+   const credible=(strongMatches>=1&&(qMatches>=1||strongMatches>=2))||
+     (qMatches>=3&&score>=5.4);
+   if(credible&&score>=4.5 && (!best||score>best.score))
+    best={quote:fragment,score};
+  }
+ }
+ return best;
+}
+function determineEvidence(q,mode){
+ const lesson=lessons[lessonIndex],length=(points[lesson?.id]||[]).length;
+ const selected=[];
+ if(mode!=="review"){selected.push(pointIndex)}
+ else if(Number.isInteger(q.sourcePoint)&&q.sourcePoint>=1&&q.sourcePoint<=length)
+  selected.push(q.sourcePoint-1);
+ else for(let i=0;i<length;i++)selected.push(i);
+ const original=availableEvidenceQuote(q);
+ let best=null;
+ for(const index of selected){
+  const part=textCache.get(lessonIndex+":"+index)||(index===pointIndex?current:null);
+  if(!part)continue;
+  if(original&&evidencePassages(part).some(text=>evidenceBounds(text,original)))
+   return {point:index,quote:original,exact:true};
+  const candidate=bestMatchingEvidence(q,part);
+  if(candidate&&(!best||candidate.score>best.score))
+   best={point:index,quote:candidate.quote,score:candidate.score,exact:false};
+ }
+ return best;
+}
 function showEvidenceForQuestion(q,feedback,mode){
- const quote=availableEvidenceQuote(q);
+ const found=determineEvidence(q,mode);
  if(mode==="review"){
-  const index=findEvidencePoint(quote);
-  if(index!==null){
+  const point=found?.point??(Number.isInteger(q.sourcePoint)?q.sourcePoint-1:null);
+  if(point!==null && point>=0){
    const url=new URL(location.href);
    url.searchParams.set("paragraph",String(lessonIndex+1));
-   url.searchParams.set("point",String(index+1));
-   url.searchParams.set("find",quote);
-   window.open(url.toString(),"_blank","noopener");
-   const info=make("p","source-note","Відкрито відповідний пункт у новій вкладці, щоб самостійна робота не перервалася.");
-   feedback.append(info);
+   url.searchParams.set("point",String(point+1));
+   if(found?.quote)url.searchParams.set("find",found.quote);
+   else url.searchParams.delete("find");
+   // Real anchor also works on browsers that block window.open.
+   const link=make("a","secondary","📖 Відкрити відповідний текст");
+   link.href=url.toString();link.target="_blank";link.rel="noopener noreferrer";
+   const row=make("div","source-back-link");row.append(link);feedback.append(row);
+   link.click();
    return;
   }
- }else if(revealEvidenceInText(quote))return;
- const info=make("p","source-note","Для цього запитання ще немає перевіреного дослівного уривка. Можеш повернутися до тексту пункту та звірити відповідь самостійно.");
+ }
+ if(found?.quote && revealEvidenceInText(found.quote))return;
+ // Even if no exact wording is available, the action must move the learner to the textbook.
+ const reader=$("ebookText");
+ reader.scrollIntoView({behavior:"smooth",block:"start"});
+ const info=make("p","source-note","Відкрила текст пункту. Знайди відповідь у матеріалі та повернися до перевірки.");
  feedback.append(info);
+ const back=make("button","secondary","← Повернутися до запитання");
+ back.onclick=()=>go($("quiz"));
+ feedback.append(back);
 }
-
 function showQuestion(){
  const state=quizState;
  if(!state || state.index>=state.questions.length)return;
