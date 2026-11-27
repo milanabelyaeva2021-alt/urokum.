@@ -842,6 +842,11 @@ function showQuestion(){
       correct:q.correct,reason:reason.slice(0,300),book:BOOK,mode:state.mode})
    });
    if(!response.ok)throw Error("Сервер тимчасово недоступний");
+   // A reported question should not enter the student's spaced-review queue.
+   const badId=pointId()+":"+q.question.slice(0,120);
+   delete spaced[badId];toStore(SPACED_KEY,spaced);
+   delete locallySavedQuestions[lessonQuizKey()];toStore(QUIZ_CACHE,locallySavedQuestions);
+   delete locallySavedReviews[lessons[lessonIndex].id];toStore(REVIEW_QUIZ_CACHE,locallySavedReviews);
    report.textContent="✓ Повідомлення надіслано";
   }catch(error){
    report.disabled=false;report.textContent="⚑ Спробувати повідомити ще раз";
@@ -1138,7 +1143,8 @@ async function startStructuredPractice(){
   host.append(make("h3",null,"3. Визнач наслідок"));
   const task=make("p",null,"Який наслідок радянсько-польського договору від 16 серпня 1945 р.?");
   const options=["Юридичне закріплення державного кордону","Проголошення незалежності України","Утворення Закарпатської області"];
-  const choice=make("select");options.forEach((v,i)=>{const o=make("option",null,v);o.value=String(i);choice.append(o)});
+  const choice=make("select");const placeholder=make("option",null,"Обери наслідок");placeholder.value="";choice.append(placeholder);
+  options.forEach((v,i)=>{const o=make("option",null,v);o.value=String(i);choice.append(o)});
   const response=make("p","small"),checkCause=make("button","primary","Перевірити наслідок");
   checkCause.onclick=()=>response.textContent=choice.value==="0"?"✓ Правильно!":"Ні. Перечитай матеріал про кордони УРСР.";
   host.append(task,choice,checkCause,response);
