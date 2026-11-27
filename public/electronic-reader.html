@@ -247,6 +247,13 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
 .recap-flow .synopsis-content{padding:16px 0 0}
 .teacher-message .message-body{font-size:inherit;line-height:inherit;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:650px){.paragraph-summary .recap-flow{padding:15px 16px}.recap-retell{width:100%}}
+
+/* Exactly one return action stays immediately after the highlighted sentence,
+   even when the answer appears mid-paragraph. */
+.source-inline-return{display:block!important;margin:11px 0 17px;line-height:1.4}
+.source-inline-return>button{display:inline-flex;align-items:center;min-height:42px;margin:0;font-family:var(--ui);font-size:13px}
+.evidence-view-head{display:block}
+.evidence-view-head h2{margin-top:5px}
 </style>
 </head>
 <body>
@@ -300,10 +307,8 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
   <section id="evidenceView" class="evidence-view" hidden aria-label="Джерело відповіді в підручнику">
    <div class="evidence-view-head">
     <div><span class="evidence-kicker">📖 Знайди відповідь у підручнику</span><h2 id="evidenceTitle"></h2></div>
-    <button id="evidenceBackTop" class="secondary" type="button">← До запитання</button>
    </div>
    <div class="ebookText" id="evidenceText"></div>
-   <button id="evidenceBackBottom" class="secondary" type="button">← Повернутися до запитання</button>
   </section>
   <section id="quiz" class="card stopCard" hidden aria-live="polite"></section>
   <section id="finished" class="card completion" hidden></section>
