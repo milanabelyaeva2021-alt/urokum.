@@ -792,6 +792,26 @@ function showQuestion(){
   state.mode==="practice"?"Повторення складного":"Самостійна робота");
  card.append(label,make("p","qNo","Запитання "+(index+1)+" із "+state.questions.length),
   make("h2","questionText",q.question));
+ const report=make("button","secondary quiz-report","⚑ Повідомити про помилку");
+ report.type="button";
+ report.onclick=async()=>{
+  if(report.disabled)return;
+  const reason=window.prompt("Що саме неправильно в запитанні? (необов’язково)","Неправильна правильна відповідь");
+  if(reason===null)return;
+  report.disabled=true;report.textContent="Надсилаю повідомлення…";
+  try{
+   const response=await fetch("/api/quiz-report",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({question:q.question,options:q.options||[],
+      correct:q.correct,reason:reason.slice(0,300),book:BOOK,mode:state.mode})
+   });
+   if(!response.ok)throw Error("Сервер тимчасово недоступний");
+   report.textContent="✓ Повідомлення надіслано";
+  }catch(error){
+   report.disabled=false;report.textContent="⚑ Спробувати повідомити ще раз";
+  }
+ };
+ card.append(report);
  const feedback=make("div","quizFeedback");feedback.hidden=true;
  let verified=false,verifyButton=null,skipButton=null;
  activeTeacherQuizContext=questionContextFromQuiz(q,state.results[index]);
@@ -890,7 +910,8 @@ function showQuestion(){
   check.disabled=true;
   record({status:chosen===q.correct?"correct":"wrong",userAnswer:q.options[chosen],
    correctAnswer:q.options[q.correct],explanation:q.explanation||""},
-   (chosen===q.correct?"✓ Правильно! ":"✕ Ще ні. Правильна відповідь: "+q.options[q.correct]+". ")+
+   (chosen===q.correct?"✓ Правильно! ":"✕ Ще ні. Правильна відповідь: "+
+    q.options[q.correct]+(/[.!?…]\\s*$/u.test(q.options[q.correct])?" ":". "))+
     (q.explanation||"Перечитай відповідний уривок підручника."));
  };
  card.append(answers,check,skipOne,feedback);
