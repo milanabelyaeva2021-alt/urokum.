@@ -1045,7 +1045,11 @@ function showCompletion(already){
  const extra=make("details","completion-more");
  extra.append(make("summary",null,"Додаткові дії"));
  const secondary=make("div","actions");
-  if(finalPoint)secondary.append(goNext);
+  if(finalPoint){
+   secondary.append(goNext);
+   const structured=make("button","secondary","Практика без ШІ: хронологія та дати");
+   structured.onclick=startStructuredPractice;secondary.append(structured);
+  }
  if(attempt){
   const mistakes=addMistakeReview(extra,attempt);
   const reviewButton=make("button","secondary","Переглянути помилки");
@@ -1077,6 +1081,73 @@ function showCompletion(already){
  else $("paragraphSummary").hidden=true;
  if(!already)go(host);
 }
+
+// Self-checked structured exercises use verified event/date pairs, not an AI key.
+async function startStructuredPractice(){
+ const lesson=lessons[lessonIndex],host=$("review");
+ $("finished").hidden=true;$("paragraphSummary").hidden=true;host.hidden=false;
+ host.replaceChildren(make("h2",null,"Практика без ШІ"),
+  make("p","small","Хронологія та відповідність — з дат і подій підручника."));
+ const data=await keyDatesAndEvents(lessonIndex);
+ const rows=data.events.map(x=>({...x,year:Number(x.date.match(/(?:18|19|20)\\d{2}/)?.[0])}))
+  .filter(x=>Number.isFinite(x.year));
+ const distinct=[...new Map(rows.map(x=>[x.year,x])).values()].slice(0,4);
+ if(distinct.length<3){
+  host.append(make("p","small","Потрібно хоча б три різні роки з підтвердженими подіями."));
+  const back=make("button","secondary","Повернутися");back.onclick=()=>showCompletion(true);host.append(back);return;
+ }
+ const shuffle=arr=>arr.map(x=>({x,r:Math.random()})).sort((a,b)=>a.r-b.r).map(a=>a.x);
+ const heading=make("h3",null,"1. Розташуй події від найдавнішої до найновішої");
+ const order=shuffle(distinct);
+ const list=make("ol","structured-order");
+ const render=()=>{
+  list.replaceChildren();
+  order.forEach((event,i)=>{
+   const li=make("li","structured-item");
+   li.append(make("span",null,event.event));
+   const up=make("button","secondary","↑"),down=make("button","secondary","↓");
+   up.disabled=i===0;down.disabled=i===order.length-1;
+   up.onclick=()=>{[order[i-1],order[i]]=[order[i],order[i-1]];render()};
+   down.onclick=()=>{[order[i],order[i+1]]=[order[i+1],order[i]];render()};
+   li.append(up,down);list.append(li);
+  });
+ };
+ render();
+ const feedback=make("p","small");
+ const check=make("button","primary","Перевірити порядок");
+ check.onclick=()=>{
+  const pass=order.every((x,i)=>i===0||order[i-1].year<x.year);
+  feedback.textContent=pass?"✓ Правильно!":"Поки ні. Порівняй роки й перестав події.";
+ };
+ const heading2=make("h3",null,"2. З'єднай дату з подією");
+ const matching=make("div","structured-match"),answers=shuffle(distinct);
+ const selects=[];
+ for(const row of distinct){
+  const label=make("label","structured-row",row.date+" — ");
+  const select=make("select");select.append(make("option",null,"Обери подію"));
+  for(const item of answers){const option=make("option",null,item.event);option.value=item.date;select.append(option)}
+  label.append(select);matching.append(label);selects.push({row,select});
+ }
+ const matchingFeedback=make("p","small");
+ const matchingCheck=make("button","primary","Перевірити відповідність");
+ matchingCheck.onclick=()=>{const n=selects.filter(x=>x.select.value===x.row.date).length;
+  matchingFeedback.textContent=n+" з "+distinct.length+" правильних.";
+ };
+ host.append(heading,list,check,feedback,heading2,matching,matchingCheck,matchingFeedback);
+ if(lesson.id==="p2"){
+  host.append(make("h3",null,"3. Визнач наслідок"));
+  const task=make("p",null,"Який наслідок радянсько-польського договору від 16 серпня 1945 р.?");
+  const options=["Юридичне закріплення державного кордону","Проголошення незалежності України","Утворення Закарпатської області"];
+  const choice=make("select");options.forEach((v,i)=>{const o=make("option",null,v);o.value=String(i);choice.append(o)});
+  const response=make("p","small"),checkCause=make("button","primary","Перевірити наслідок");
+  checkCause.onclick=()=>response.textContent=choice.value==="0"?"✓ Правильно!":"Ні. Перечитай матеріал про кордони УРСР.";
+  host.append(task,choice,checkCause,response);
+ }
+ const back=make("button","secondary","Повернутися до результату");
+ back.onclick=()=>{host.hidden=true;showCompletion(true)};
+ host.append(back);go(host);
+}
+
 function nextPoint(){
  const lesson=lessons[lessonIndex],length=(points[lesson.id]||[]).length;
  if(pointIndex<length-1)return loadPoint(lessonIndex,pointIndex+1);
