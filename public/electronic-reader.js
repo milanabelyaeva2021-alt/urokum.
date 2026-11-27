@@ -425,6 +425,14 @@ function validQuestion(q,index,mode="point"){
  return Array.isArray(q.options)&&q.options.length===4&&
    q.options.every(x=>typeof x==="string")&&Number.isInteger(q.correct)&&q.correct>=0&&q.correct<4;
 }
+// Attach the exact textbook sentence to each question before it is saved.
+// Older cached quizzes are repaired locally, without spending AI requests.
+function anchorPointQuestions(questions,part){
+ return questions.map(q=>{
+  const found=bestMatchingEvidence(q,part);
+  return found?{...q,sourceSentence:found.quote}:q;
+ });
+}
 $("beginQuiz").onclick=()=>startQuiz();
 $("skipAllQuiz").onclick=()=>skipCheckpoint();
 function skipCheckpoint(){
@@ -440,7 +448,10 @@ async function startQuiz(){
  const cacheKey=lessonQuizKey(),cached=locallySavedQuestions[cacheKey];
  if(Array.isArray(cached)&&cached.length===5&&cached.every((q,i)=>validQuestion(q,i,"point"))){
   $("readEnd").hidden=true;$("finished").hidden=true;$("paragraphSummary").hidden=true;$("quiz").hidden=false;
-  quizState={questions:cached,index:0,mode:"point",done:0,results:[],loadVersion:loadToken};
+  const anchored=anchorPointQuestions(cached,current);
+  locallySavedQuestions[cacheKey]=anchored;
+  toStore(QUIZ_CACHE,locallySavedQuestions);
+  quizState={questions:anchored,index:0,mode:"point",done:0,results:[],loadVersion:loadToken};
   showQuestion();go($("quiz"));return;
  }
  $("readEnd").hidden=true;$("finished").hidden=true;$("paragraphSummary").hidden=true;
@@ -456,8 +467,9 @@ async function startQuiz(){
   if(!Array.isArray(response.questions)||response.questions.length!==5||
      !response.questions.every((q,i)=>validQuestion(q,i,"point")))
    throw Error("Отримано некоректний формат запитань");
-  quizState={questions:response.questions,index:0,mode:"point",done:0,results:[],loadVersion:loadToken};
-  locallySavedQuestions[cacheKey]=response.questions;
+  const anchored=anchorPointQuestions(response.questions,current);
+  quizState={questions:anchored,index:0,mode:"point",done:0,results:[],loadVersion:loadToken};
+  locallySavedQuestions[cacheKey]=anchored;
   const entries=Object.entries(locallySavedQuestions);
   if(entries.length>140)locallySavedQuestions=Object.fromEntries(entries.slice(-140));
   toStore(QUIZ_CACHE,locallySavedQuestions);
