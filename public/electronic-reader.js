@@ -90,11 +90,16 @@ async function showParagraphSummary(){
  if(pointIndex!==length-1){host.hidden=true;return}
  const version=loadToken,lessonAtStart=lessonIndex;
  host.hidden=false;host.replaceChildren();
+ const recap=make("div","recap-flow");
+ recap.append(make("h2","recap-title","🧠 Закріпити знання"));
+ recap.append(make("p","recap-intro","Спочатку спробуй переказати головне своїми словами. Після цього відкрий конспект і звір найважливіші факти."));
+ const retell=make("button","secondary recap-retell","✍️ Переказати своїми словами");
+ retell.onclick=openRetelling;recap.append(retell);
  const expand=make("details","synopsis-toggle");
- expand.append(make("summary",null,"📚 Короткий конспект параграфа"));
+ expand.append(make("summary",null,"📚 Порівняти з коротким конспектом"));
  const body=make("div","synopsis-content");
  body.append(make("p","small","Готую найважливіше з параграфа…"));
- expand.append(body);host.append(expand);
+ expand.append(body);recap.append(expand);host.append(recap);
  try{
   const items=await shortParagraphSummary(lessonAtStart);
   if(version!==loadToken||lessonAtStart!==lessonIndex)return;
@@ -997,15 +1002,18 @@ function showReviewCompleted(partial=false,score=null,total=6){
  if(typeof score==="number")host.append(make("div","score-big",score+" із "+total));
  host.append(make("p","small",partial?"Пропущені запитання не зараховуються як правильні. Самостійну можна пройти ще раз.":"Результат збережено. Можеш переказати матеріал або перейти до наступного параграфа."));
  const actions=make("div","actions");
- const retell=make("button","secondary","Переказати параграф");
- retell.onclick=openRetelling;
+ const retell=make("button","secondary","🧠 Закріпити знання");
+ retell.onclick=()=>{
+  host.hidden=true;showCompletion(true);
+  go($("paragraphSummary"));
+ };
  const next=make("button","primary","Продовжити читання →");next.onclick=nextPoint;
  actions.append(retell,next);host.append(actions);go(host);
 }
 function openRetelling(){
  const host=$("review");$("finished").hidden=true;host.hidden=false;host.replaceChildren();
- host.append(make("h2",null,"Переказ параграфа"),
-  make("p","small","Спробуй своїми словами пояснити головні події та їхні причини. ШІ підкаже, чого не вистачає."));
+ host.append(make("h2",null,"Переказ своїми словами"),
+  make("p","small","Спробуй пригадати основні події, дати та причини, не підглядаючи в конспект. Потім перевір себе за короткими тезами."));
  const input=make("textarea","written");input.maxLength=2500;input.rows=8;
  input.placeholder="Я зрозумів(ла), що…";
  const responseHost=make("div","reviewText");responseHost.hidden=true;
@@ -1022,9 +1030,18 @@ function openRetelling(){
   }catch(error){if(version===loadToken)responseHost.textContent=error.message}
   finally{check.disabled=false}
  };
+ const compare=make("button","secondary","📚 Звірити з конспектом");
+ compare.onclick=()=>{
+  host.hidden=true;showCompletion(true);
+  const summary=$("paragraphSummary");
+  const details=summary.querySelector(".synopsis-toggle");
+  if(details)details.open=true;
+  go(summary);
+ };
  const back=make("button","secondary","Повернутися до пункту");
  back.onclick=()=>{host.hidden=true;showCompletion(true)};
- host.append(input,check,responseHost,back);go(host);
+ const actions=make("div","actions");actions.append(compare,back);
+ host.append(input,check,responseHost,actions);go(host);
 }
 function teacherThreadKey(){return lessons[lessonIndex]?.id||"general"}
 function currentTeacherThread(){
