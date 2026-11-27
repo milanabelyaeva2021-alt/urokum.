@@ -45,43 +45,49 @@ function restartParagraph(){
  loadPoint(lessonIndex,0);
 }
 $("restartParagraphBtn").onclick=restartParagraph;
-const PREPARED_SUMMARIES={
+const PREPARED_KEY_EVENTS={
  p1:[
-  "Другий період Новітньої історії України охоплює 1945 р. — початок XXI ст.",
-  "Після Другої світової війни світ розділився на два блоки, розгорнулося протистояння США та СРСР.",
-  "24 серпня 1991 р. Україна проголосила незалежність; почалося становлення незалежної держави.",
-  "Друга світова війна завдала Україні величезних людських та матеріальних втрат.",
-  "За переписом 1959 р. українці становили 76,8 % населення УРСР."
+  {date:"1945 р.",event:"Завершення Другої світової війни та початок другого періоду Новітньої історії України."},
+  {date:"1946–1947 рр.",event:"Масовий штучний голод в УРСР у роки післявоєнної відбудови."},
+  {date:"Середина 1950-х рр.",event:"Десталінізація, реабілітація незаконно засуджених і певна лібералізація режиму за Микити Хрущова."},
+  {date:"1959 р.",event:"Перепис населення УРСР: 41,9 млн жителів; українці становили 76,8 % населення."},
+  {date:"1985–1991 рр.",event:"Період «перебудови», «гласності» та активізації українського національно-визвольного руху."},
+  {date:"24 серпня 1991 р.",event:"Проголошення незалежності України."}
  ],
  p2:[
-  "Після Другої світової війни кордони УРСР визначалися домовленостями з Польщею, Чехословаччиною та Румунією.",
-  "Переселення населення між УРСР і Польщею часто було примусовим.",
-  "У 1947 р. польська влада здійснила операцію «Вісла», під час якої українців депортували з їхніх етнічних земель.",
-  "У 1945 р. УРСР стала однією з країн — засновниць ООН, але її зовнішня політика залежала від СРСР."
+  {date:"6 травня 1945 р.",event:"Українська делегація прибула на установчу конференцію Організації Об’єднаних Націй у Сан-Франциско."},
+  {date:"16 серпня 1945 р.",event:"Радянсько-польський договір юридично закріпив державний кордон."},
+  {date:"22 січня 1946 р.",event:"Утворено Закарпатську область у складі УРСР."},
+  {date:"10 лютого 1947 р.",event:"Підписано радянсько-румунський договір, який закріпив післявоєнні кордони."},
+  {date:"1947 р.",event:"Примусова депортаційна операція «Вісла» проти українського населення в Польщі."},
+  {date:"1990 р.",event:"Сенат Республіки Польща засудив операцію «Вісла»."}
  ]
 };
-function firstSummarySentence(value){
- const text=String(value||"").replace(/\s+/g," ").trim();
- if(!text)return "";
- const sentence=text.replace(/\b(рр?|ст|ім)\./giu,"$1·").match(/^(.{45,240}?[.!?])(?:\s|$)/u);
- return (sentence?sentence[1].replace(/·/g,"."):text.slice(0,220).replace(/\s+\S*$/,"")+"…").trim();
-}
-async function shortParagraphSummary(i){
+async function keyDatesAndEvents(i){
  const lesson=lessons[i],key=lesson.id;
+ if(PREPARED_KEY_EVENTS[key])return {events:PREPARED_KEY_EVENTS[key],prepared:true};
  if(summaryCache.has(key))return summaryCache.get(key);
- if(PREPARED_SUMMARIES[key])return PREPARED_SUMMARIES[key];
- const length=(points[key]||[]).length,items=[];
- for(let j=0;j<length;j++){
+ const events=[],seen=new Set(),length=(points[key]||[]).length;
+ for(let j=0;j<Math.min(length,8)&&events.length<8;j++){
   const part=await fetchPoint(i,j);
-  const blocks=Array.isArray(part.blocks)?part.blocks:[];
-  const intro=blocks.find(x=>x.type==="text"&&String(x.text||"").length>50)?.text||
-    part.paragraphs?.find(x=>String(x||"").length>50)||"";
-  const sentence=firstSummarySentence(intro);
-  if(sentence)items.push(sentence);
-  if(items.length>=6)break;
+  const paragraphs=(part.blocks||[]).filter(x=>["text","list","source"].includes(x.type))
+   .flatMap(x=>x.type==="list"?x.items||[]:[x.text||""]);
+  if(!paragraphs.length)paragraphs.push(...(part.paragraphs||[]));
+  for(const paragraph of paragraphs){
+   for(const sentence of textbookSentenceRanges(paragraph)){
+    const date=sentence.text.match(/(?:18|19|20)\d{2}(?:\s*[—–-]\s*(?:18|19|20)?\d{2})?\s*рр?\./u);
+    if(!date||sentence.text.length<35||sentence.text.length>300)continue;
+    if(!/(відбув|підпис|поча|утвор|створ|проголос|заверш|обра|заснув|вступ|ліквід|віднов|ухвал|пров[еі]л|пересел|здійсн|запровад|відкр|увійш|започат|загин|було|стала|прийня)/iu.test(sentence.text))continue;
+    const fingerprint=sentence.text.toLocaleLowerCase("uk");
+    if(seen.has(fingerprint))continue;
+    seen.add(fingerprint);
+    events.push({date:date[0],event:sentence.text});
+    if(events.length>=8)break;
+   }
+   if(events.length>=8)break;
+  }
  }
- summaryCache.set(key,items);
- return items;
+ const result={events,prepared:false};summaryCache.set(key,result);return result;
 }
 async function showParagraphSummary(){
  const host=$("paragraphSummary"),lesson=lessons[lessonIndex];
@@ -92,30 +98,35 @@ async function showParagraphSummary(){
  host.hidden=false;host.replaceChildren();
  const recap=make("div","recap-flow");
  recap.append(make("h2","recap-title","🧠 Закріпити знання"));
- recap.append(make("p","recap-intro","Спочатку спробуй переказати головне своїми словами. Після цього відкрий конспект і звір найважливіші факти."));
+ recap.append(make("p","recap-intro","Спочатку переказуй матеріал своїми словами. Потім за бажанням відкрий найважливіші дати й події для повторення."));
  const retell=make("button","secondary recap-retell","✍️ Переказати своїми словами");
  retell.onclick=openRetelling;recap.append(retell);
  const expand=make("details","synopsis-toggle");
- expand.append(make("summary",null,"📚 Порівняти з коротким конспектом"));
+ expand.append(make("summary",null,"📅 Основні дати і події"));
  const body=make("div","synopsis-content");
- body.append(make("p","small","Готую найважливіше з параграфа…"));
+ body.append(make("p","small","Готую перелік дат і подій…"));
  expand.append(body);recap.append(expand);host.append(recap);
  try{
-  const items=await shortParagraphSummary(lessonAtStart);
+  const data=await keyDatesAndEvents(lessonAtStart);
   if(version!==loadToken||lessonAtStart!==lessonIndex)return;
   body.replaceChildren();
-  if(!items.length){
-   body.append(make("p","small","Для цього параграфа ще немає готового конспекту."));
+  if(!data.events.length){
+   body.append(make("p","small","Для цього параграфа ще немає підготовленого переліку дат і подій."));
    return;
   }
-  const midpoint=items.length>3?Math.ceil(items.length/2):items.length;
-  body.append(make("p","summary-prose",items.slice(0,midpoint).join(" ")));
-  if(midpoint<items.length)body.append(make("p","summary-prose",items.slice(midpoint).join(" ")));
-  if(!PREPARED_SUMMARIES[lesson.id])
-   body.append(make("p","summary-footnote","Тези автоматично вибрано з тексту. Перевіряй важливі дати й факти за підручником."));
+  const list=make("ol","key-events-list");
+  for(const item of data.events){
+   const li=make("li","key-event");
+   li.append(make("strong","key-event-date",bookTypography(item.date)),
+    make("span","key-event-description",bookTypography(item.event)));
+   list.append(li);
+  }
+  body.append(list);
+  if(!data.prepared)body.append(make("p","summary-footnote",
+   "Ці речення з датами автоматично вибрано з електронного тексту. Перевір їх за підручником."));
  }catch(error){
   if(version!==loadToken)return;
-  body.replaceChildren(make("p","small","Не вдалося відкрити конспект."));
+  body.replaceChildren(make("p","small","Не вдалося відкрити перелік дат і подій."));
  }
 }
 // Progress belongs to the learner; transfer via local JSON rather than insecure shared server files.
@@ -510,7 +521,7 @@ function textbookSentenceRanges(text){
   if(!/[.!?]/u.test(source[i]))continue;
   // Do not break after common Ukrainian abbreviations or years ("1945 р.").
   const word=source.slice(Math.max(start,i-12),i+1);
-  if(/(?:^|[\s(])(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word))continue;
+  if(/(?:^|[\s(])(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word)&&!/^\s*[А-ЯІЇЄҐA-Z]/u.test(source.slice(i+1)))continue;
   if(/\d\.\d/u.test(source.slice(Math.max(0,i-1),i+2)))continue;
   let after=i+1;
   while(after<source.length&&/[»”’"')\]]/u.test(source[after]))after++;
@@ -1009,7 +1020,7 @@ function showReviewCompleted(partial=false,score=null,total=6){
 function openRetelling(){
  const host=$("review");$("finished").hidden=true;host.hidden=false;host.replaceChildren();
  host.append(make("h2",null,"Переказ своїми словами"),
-  make("p","small","Спробуй пригадати основні події, дати та причини, не підглядаючи в конспект. Потім перевір себе за короткими тезами."));
+  make("p","small","Спробуй пригадати головні події, дати та їхні причини. Потім звір відповідь зі списком основних дат і подій."));
  const input=make("textarea","written");input.maxLength=2500;input.rows=8;
  input.placeholder="Я зрозумів(ла), що…";
  const responseHost=make("div","reviewText");responseHost.hidden=true;
@@ -1026,7 +1037,7 @@ function openRetelling(){
   }catch(error){if(version===loadToken)responseHost.textContent=error.message}
   finally{check.disabled=false}
  };
- const compare=make("button","secondary","📚 Звірити з конспектом");
+ const compare=make("button","secondary","📅 Переглянути основні дати і події");
  compare.onclick=()=>{
   host.hidden=true;showCompletion(true);
   const summary=$("paragraphSummary");
