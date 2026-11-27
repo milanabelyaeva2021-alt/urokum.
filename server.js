@@ -632,6 +632,23 @@ app.get("/api/book/:id/page/:number", async (req, res) => {
   } catch { res.status(404).json({ error: "Підручник не знайдено." }); }
 });
 
+// Student reports are intentionally limited and stored in server logs only.
+// No name, account information or written student answers are collected.
+app.post("/api/quiz-report",limitRequests("quiz-report",8,60*60*1000),(req,res)=>{
+ const {question,options,correct,reason,book,mode}=req.body||{};
+ if(typeof question!=="string"||question.length<8||question.length>500||
+   !Array.isArray(options)||options.length>4||
+   options.some(x=>typeof x!=="string"||x.length>300)||
+   typeof reason!=="string"||reason.length>300)
+  return res.status(400).json({error:"Некоректні дані повідомлення."});
+ console.warn("UROKUM_QUIZ_REPORT",JSON.stringify({
+  question,options,correct:Number.isInteger(correct)?correct:null,
+  reason,book:String(book||"").slice(0,80),mode:String(mode||"").slice(0,30),
+  time:new Date().toISOString()
+ }));
+ return res.json({ok:true});
+});
+
 // Save generated textbook questions in memory, so repeat views do not
 // consume scarce free-tier requests. Never cache students' written answers.
 const textbookQuizCache=new Map();
@@ -783,6 +800,37 @@ app.post("/api/tutor", aiLimiter, async (req, res) => {
           if(normalized.length>=24 && normalized.split(" ").length>=4 && sourcePassages.some(p=>p.includes(normalized)))
             item.sourceQuote=quote;
           else delete item.sourceQuote;
+        }
+        // The AI-supplied index is NOT sufficient evidence of correctness.
+        // Reject provable contradictions before the quiz reaches a student.
+        const words=value=>normalizedEvidence(value).split(" ").filter(x=>x.length>3);
+        const common=(a,b)=>{
+          const set=new Set(words(a));return words(b).filter(x=>set.has(x)).length;
+        };
+        const yearRange=value=>{
+          const m=String(value||"").match(/\\b(1[89]\\d{2}|20\\d{2})\\s*[–—-]\\s*(1[89]\\d{2}|20\\d{2})\\b/u);
+          return m?[Number(m[1]),Number(m[2])]:null;
+        };
+        for(const item of qs){
+          if(item.type==="open")continue;
+          const variants=item.options.map(normalizedEvidence);
+          if(new Set(variants).size!==4)throw Error("Duplicate answer options");
+          const ranges=item.options.map(yearRange);
+          if(ranges.filter(Boolean).length>=2){
+            for(let i=0;i<ranges.length;i++)for(let j=i+1;j<ranges.length;j++){
+              if(ranges[i]&&ranges[j]&&Math.max(ranges[i][0],ranges[j][0])<=Math.min(ranges[i][1],ranges[j][1]))
+                throw Error("Overlapping answer periods");
+            }
+          }
+          const evidence=String(item.sourceQuote||item.sourceSentence||"");
+          if(!evidence)throw Error("Missing verified textbook evidence");
+          const explanation=String(item.explanation||"");
+          // If another answer is much better supported by the model's own
+          // explanation AND textbook excerpt, this question is unreliable.
+          const support=item.options.map(option=>common(option,explanation)+2*common(option,evidence));
+          const correctSupport=support[item.correct];
+          if(support.some((n,i)=>i!==item.correct&&n>=correctSupport+3&&n>=4))
+            throw Error("Explanation contradicts marked answer");
         }
         const result={questions:qs};
         if(cacheKey){if(textbookQuizCache.size>200)textbookQuizCache.delete(textbookQuizCache.keys().next().value);
