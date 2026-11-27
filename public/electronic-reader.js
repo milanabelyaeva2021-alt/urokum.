@@ -2,9 +2,9 @@ const $=id=>document.getElementById(id);
 const BOOK="history11-gisem-stand";
 const SAVE="urokum:ebook-reading:"+BOOK, DONE="urokum:ebook-finished:"+BOOK,
  REVIEW_DONE="urokum:ebook-reviews:"+BOOK, SKIPPED="urokum:ebook-skipped:"+BOOK,
- QUIZ_CACHE="urokum:ebook-quiz-cache:"+BOOK,
+ QUIZ_CACHE="urokum:ebook-quiz-cache:v2:"+BOOK,
  ATTEMPTS="urokum:ebook-attempts:"+BOOK, FONT_SIZE="urokum:ebook-font-size:"+BOOK,
- REVIEW_QUIZ_CACHE="urokum:ebook-prepared-reviews:"+BOOK;
+ REVIEW_QUIZ_CACHE="urokum:ebook-prepared-reviews:v2:"+BOOK;
 let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
 let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null,quizRun=0;
 let locallySavedQuestions={},locallySavedReviews={},pointAttempts={},readerFontSize=19;
@@ -1089,7 +1089,7 @@ async function startStructuredPractice(){
  host.replaceChildren(make("h2",null,"Практика без ШІ"),
   make("p","small","Хронологія та відповідність — з дат і подій підручника."));
  const data=await keyDatesAndEvents(lessonIndex);
- const rows=data.events.map(x=>({...x,year:Number(x.date.match(/(?:18|19|20)\\d{2}/)?.[0])}))
+ const rows=data.events.map(x=>({...x,year:Number(x.date.match(/(?:18|19|20)\d{2}/)?.[0])}))
   .filter(x=>Number.isFinite(x.year));
  const distinct=[...new Map(rows.map(x=>[x.year,x])).values()].slice(0,4);
  if(distinct.length<3){
@@ -1258,7 +1258,7 @@ function openRetelling(){
   host.hidden=true;showCompletion(true);
   const summary=$("paragraphSummary");
   const details=summary.querySelector(".synopsis-toggle");
-  if(details)details.open=true;
+  if(details){details.hidden=false;details.open=true;}
   go(summary);
  };
  const back=make("button","secondary","Повернутися до пункту");
