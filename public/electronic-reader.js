@@ -911,7 +911,7 @@ function showQuestion(){
   record({status:chosen===q.correct?"correct":"wrong",userAnswer:q.options[chosen],
    correctAnswer:q.options[q.correct],explanation:q.explanation||""},
    (chosen===q.correct?"✓ Правильно! ":"✕ Ще ні. Правильна відповідь: "+
-    q.options[q.correct]+(/[.!?…]\\s*$/u.test(q.options[q.correct])?" ":". "))+
+    q.options[q.correct]+(/[.!?…]\s*$/u.test(q.options[q.correct])?" ":". "))+
     (q.explanation||"Перечитай відповідний уривок підручника."));
  };
  card.append(answers,check,skipOne,feedback);
