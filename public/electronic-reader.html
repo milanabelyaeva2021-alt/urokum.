@@ -269,6 +269,26 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
 .key-event-date{font-family:var(--ui);font-size:13px;font-weight:800;color:var(--green)}
 .key-event-description{font-size:14px;color:var(--ink)}
 @media(max-width:650px){.key-event{grid-template-columns:1fr;gap:2px;padding:11px 0}}
+
+/* Leave space for floating teacher control on phones and desktop. */
+#bookShell{padding-bottom:115px}
+#quiz,#review,#finished,#evidenceView,.paragraph-summary{scroll-margin-bottom:130px}
+#quiz .quiz-skip,#review .quiz-skip,#finished .quiz-skip,#skipAllQuiz{
+ font-size:12px!important;padding:6px 10px!important;min-height:31px!important;
+ opacity:.62!important;background:transparent!important;box-shadow:none!important;
+ border:1px dashed var(--line)!important;color:var(--muted)!important;
+}
+.spaced-review{display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+ padding:12px 16px;margin:0 0 15px;border:1px solid var(--line);
+ background:var(--card);border-radius:13px}
+.spaced-review .small{margin-left:auto}
+.spaced-review button{font-size:13px;padding:8px 12px}
+@media(max-width:700px){
+ #bookShell{padding-bottom:165px}
+ #quiz,#review,#finished,#evidenceView{scroll-margin-bottom:160px}
+ .teacher-fab{max-width:118px!important;padding:9px 11px!important;
+ font-size:12px!important;bottom:max(12px,env(safe-area-inset-bottom))!important}
+}
 </style>
 </head>
 <body>
@@ -316,7 +336,7 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
    <div class="readEnd" id="readEnd">
     <p class="hint">Коли дочитаєш пункт, перевір, що ти зрозумів(ла).</p>
     <button class="primary" id="beginQuiz">Я прочитав(ла), перевірити</button>
-    <button class="secondary" id="skipAllQuiz" type="button">Пропустити перевірку →</button>
+    <button class="secondary quiz-skip" id="skipAllQuiz" type="button">Пропустити перевірку →</button>
    </div>
   </article>
   <section id="evidenceView" class="evidence-view" hidden aria-label="Джерело відповіді в підручнику">
