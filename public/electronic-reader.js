@@ -521,7 +521,7 @@ function textbookSentenceRanges(text){
   if(!/[.!?]/u.test(source[i]))continue;
   // Do not break after common Ukrainian abbreviations or years ("1945 р.").
   const word=source.slice(Math.max(start,i-12),i+1);
-  if(/(?:^|[\s(])(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word)&&!/^\s*[А-ЯІЇЄҐA-Z]/u.test(source.slice(i+1)))continue;
+  if(/(?:^|[\s(])(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word)&&!/^\s+(?:Згодом|Проте|Однак|Натомість|Пізніше|Тоді|Водночас|Відтак|Отже)(?=\s|[,.;])/u.test(source.slice(i+1)))continue;
   if(/\d\.\d/u.test(source.slice(Math.max(0,i-1),i+2)))continue;
   let after=i+1;
   while(after<source.length&&/[»”’"')\]]/u.test(source[after]))after++;
