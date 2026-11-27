@@ -510,7 +510,7 @@ function textbookSentenceRanges(text){
   if(!/[.!?]/u.test(source[i]))continue;
   // Do not break after common Ukrainian abbreviations or years ("1945 р.").
   const word=source.slice(Math.max(start,i-12),i+1);
-  if(/\b(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word))continue;
+  if(/(?:^|[\s(])(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word))continue;
   if(/\d\.\d/u.test(source.slice(Math.max(0,i-1),i+2)))continue;
   let after=i+1;
   while(after<source.length&&/[»”’"')\]]/u.test(source[after]))after++;
@@ -545,32 +545,24 @@ function fullSentenceContaining(text,quote){
 
 function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))){
  if(!quote)return false;
- // Only one clue at a time; older highlights should not remain on the page.
- for(const previous of area.querySelectorAll("mark.ebook-source-highlight")){
+ for(const previous of area.querySelectorAll("mark.ebook-source-highlight"))
   previous.replaceWith(document.createTextNode(previous.textContent));
- }
- for(const previous of area.querySelectorAll(".source-back-link"))previous.remove();
- for(const el of area.querySelectorAll("p, li, td, dd, blockquote")){
-  const literal=el.textContent||"",sentence=fullSentenceContaining(literal,quote);
+ for(const previous of area.querySelectorAll(".source-inline-return"))previous.remove();
+ for(const el of area.querySelectorAll("p, li, td, dd, blockquote, figcaption")){
+  const literal=el.textContent||"";
+  const sentence=fullSentenceContaining(literal,quote);
   if(!sentence)continue;
-  const bounds={start:sentence.start,end:sentence.end};
-  // These ebook blocks have a single text payload; do not destroy nested markup.
-  const unexpectedMarkup=Array.from(el.children).some(x=>x.tagName!=="MARK");
-  if(unexpectedMarkup)continue;
-  for(const mark of el.querySelectorAll("mark.ebook-source-highlight")){
-   mark.replaceWith(document.createTextNode(mark.textContent));
-  }
-  const oldBack=area.querySelector(".source-back-link");
-  if(oldBack)oldBack.remove();
-  const before=literal.slice(0,bounds.start),target=literal.slice(bounds.start,bounds.end),after=literal.slice(bounds.end);
-  const highlight=document.createElement("mark");highlight.className="ebook-source-highlight";highlight.textContent=target;
-  el.replaceChildren(document.createTextNode(before),highlight,document.createTextNode(after));
-  const details=el.closest("details");if(details)details.open=true;
-  const back=make("div","source-back-link");
+  // Keep charts and other structured elements intact.
+  if(Array.from(el.children).some(node=>node.tagName!=="MARK"))continue;
+  const mark=make("mark","ebook-source-highlight",literal.slice(sentence.start,sentence.end));
+  const back=make("span","source-inline-return");
   const button=make("button","secondary","← Повернутися до запитання");
-  button.onclick=onBack;back.append(button);
-  el.insertAdjacentElement("afterend",back);
-  highlight.scrollIntoView({behavior:"smooth",block:"center"});
+  button.onclick=onBack;
+  back.append(button);
+  el.replaceChildren(document.createTextNode(literal.slice(0,sentence.start)),
+    mark,back,document.createTextNode(literal.slice(sentence.end)));
+  const details=el.closest("details");if(details)details.open=true;
+  mark.scrollIntoView({behavior:"smooth",block:"center"});
   return true;
  }
  return false;
@@ -587,16 +579,18 @@ function findEvidencePoint(quote){
 // Recover a textbook location even for questions cached before sourceQuote was added.
 // We score individual text passages using the question AND its correct answer.
 // If confidence is too low, jump to the reading passage without a false highlight.
-const evidenceStopWords=new Set(("який яка які яке коли куди чому для через після перед було були була були буде років року роках року час який чим що хто як це цей цих при між через про свою своєї своїх до від над під із та або і не на у в за по його їх вона вони має мала підручник текст параграф пункт українa україни україні український україна урср срср якій котрий тієї часів вкажи назви поясни правильну відповідь відповідний історії історичний під час").split(/\s+/u));
+const evidenceStopWords=new Set(("який яка які яке коли куди чому для через після перед було були була буде років року роках час чим що хто як це цей цих при між через про свою своєї своїх до від над під із та або але не на у в за по його їх вона вони має мала підручник текст параграф пункт якій котрий тієї часів вкажи назви поясни правильну відповідь відповідний історії історичний період періоду друга світова війна").split(/\s+/u));
 function evidenceTerms(text){
- const output=new Set();
- for(const token of String(text||"").toLocaleLowerCase("uk").match(/[\p{L}\p{N}]+/gu)||[]){
-  if(token.length<4 && !/^\d{3,4}$/u.test(token))continue;
+ const result=new Set();
+ for(const raw of String(text||"").toLocaleLowerCase("uk").match(/[\p{L}\p{N}]+(?:[,.][0-9]+)?/gu)||[]){
+  const token=raw.replace(",",".");
+  if(token.length<4&&!["сша","упа","оон","оун"].includes(token))continue;
   if(evidenceStopWords.has(token))continue;
-  output.add(/^\d/u.test(token)?token:token.slice(0,Math.min(6,token.length)));
+  result.add(/^\d/u.test(token)?token:token.slice(0,7));
  }
- return [...output];
+ return [...result];
 }
+function normalizedSourceText(text){return evidenceIndex(text).value}
 function evidencePassages(part){
  const blocks=part?.blocks||[];
  const collected=[];
@@ -605,51 +599,53 @@ function evidencePassages(part){
   if(b.type==="list")collected.push(...(b.items||[]));
   if(b.type==="table")collected.push(...(b.rows||[]).flat().map(String));
   if(b.type==="terms")collected.push(...(b.entries||[]).map(x=>x.term+" "+x.definition));
+  if(b.type==="chart"&&b.caption)collected.push(b.caption);
  }
  if(!collected.length)collected.push(...(part?.paragraphs||[]));
  return collected.filter(x=>String(x).trim().length>25);
 }
-function bestMatchingEvidence(q,part){
- const answer=q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"";
- const strong=evidenceTerms(answer),question=evidenceTerms(q.question),expl=evidenceTerms(q.explanation||"");
- let best=null;
- for(const paragraph of evidencePassages(part)){
-  for(const sentence of textbookSentenceRanges(paragraph)){
-   if(sentence.text.split(/\s+/u).length<5)continue;
-   const tokens=new Set(evidenceTerms(sentence.text));
-   const answerHits=strong.filter(t=>tokens.has(t)).length;
-   const qHits=question.filter(t=>tokens.has(t)).length;
-   const explHits=expl.filter(t=>tokens.has(t)).length;
-   const score=answerHits*4+qHits*1.6+Math.min(2,explHits)*.3;
-   // Do not highlight a sentence merely because it mentions a generic era.
-   if(answerHits<1||score<5.3)continue;
-   if(!best||score>best.score)best={quote:sentence.text,score};
+function candidateEvidenceSentences(q,part){
+ const answer=String(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"").trim();
+ const answerTerms=evidenceTerms(answer),questionTerms=evidenceTerms(q.question||"");
+ const extraTerms=evidenceTerms(q.explanation||"");
+ const quote=String(q.sourceSentence||q.sourceQuote||"").trim();
+ const normQuote=normalizedSourceText(quote),normAnswer=normalizedSourceText(answer);
+ const choices=[];
+ for(const passage of evidencePassages(part)){
+  const quoteIsHere=normQuote.length>15&&normalizedSourceText(passage).includes(normQuote);
+  const linked=quoteIsHere?fullSentenceContaining(passage,quote):null;
+  for(const sentence of textbookSentenceRanges(passage)){
+   if(sentence.text.split(/\s+/u).length<3)continue;
+   const normalized=normalizedSourceText(sentence.text),tokens=new Set(evidenceTerms(sentence.text));
+   const answerHits=answerTerms.filter(t=>tokens.has(t)).length;
+   const questionHits=questionTerms.filter(t=>tokens.has(t)).length;
+   const extraHits=extraTerms.filter(t=>tokens.has(t)).length;
+   const phraseMatch=normAnswer.length>=5&&normalized.includes(normAnswer);
+   const manual=typeof q.sourceSentence==="string"&&normalized===normalizedSourceText(q.sourceSentence);
+   const fromQuote=Boolean(linked&&linked.text===sentence.text);
+   // Direct correct-answer evidence outranks a quote that spans unrelated sentences.
+   const score=answerHits*5+questionHits*1.1+Math.min(3,extraHits)*0.6+
+    (phraseMatch?24:0)+(manual?30:0)+(fromQuote?4:0);
+   const credible=phraseMatch||manual||answerHits>=1&&
+    (answerHits>=Math.min(2,answerTerms.length)||fromQuote&&questionHits>=1);
+   if(credible)choices.push({quote:sentence.text,score,answerHits,questionHits,fromQuote});
   }
  }
- return best;
+ return choices.sort((a,b)=>b.score-a.score||a.quote.length-b.quote.length);
 }
+function bestMatchingEvidence(q,part){return candidateEvidenceSentences(q,part)[0]||null}
 function determineEvidence(q,mode){
- const lesson=lessons[lessonIndex],length=(points[lesson?.id]||[]).length;
- const selected=[];
- if(mode!=="review"){selected.push(pointIndex)}
- else if(Number.isInteger(q.sourcePoint)&&q.sourcePoint>=1&&q.sourcePoint<=length)
-  selected.push(q.sourcePoint-1);
- else for(let i=0;i<length;i++)selected.push(i);
- const original=availableEvidenceQuote(q);
+ const length=(points[lessons[lessonIndex]?.id]||[]).length;
+ const indices=mode==="review"&&Number.isInteger(q.sourcePoint)&&q.sourcePoint>=1&&q.sourcePoint<=length?
+  [q.sourcePoint-1]:[pointIndex];
+ if(mode==="review"&&!Number.isInteger(q.sourcePoint))
+  for(let i=0;i<length;i++)if(i!==pointIndex)indices.push(i);
  let best=null;
- for(const index of selected){
+ for(const index of indices){
   const part=textCache.get(lessonIndex+":"+index)||(index===pointIndex?current:null);
   if(!part)continue;
-  if(original&&evidencePassages(part).some(text=>evidenceBounds(text,original))){
-   const match=evidencePassages(part).map(text=>fullSentenceContaining(text,original)).find(Boolean);
-   const answer=evidenceTerms(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"");
-   const sentenceTokens=new Set(evidenceTerms(match?.text||""));
-   if(match && (answer.some(term=>sentenceTokens.has(term)) || typeof q.sourceQuote==="string"))
-    return {point:index,quote:match.text,exact:true,score:100};
-  }
-  const candidate=bestMatchingEvidence(q,part);
-  if(candidate&&(!best||candidate.score>best.score))
-   best={point:index,quote:candidate.quote,score:candidate.score,exact:false};
+  const found=bestMatchingEvidence(q,part);
+  if(found&&(!best||found.score>best.score))best={...found,point:index};
  }
  return best;
 }
@@ -684,12 +680,14 @@ async function showEvidenceForQuestion(q,feedback,mode){
   if(Array.isArray(part.blocks)&&part.blocks.length)renderEbookBlocks(host,part.blocks);
   else{host.replaceChildren();(part.paragraphs||[]).forEach(p=>host.append(make("p",null,bookTypography(p))))}
   // Exact quotes come from the textbook; old quizzes use the closest passage.
-  const candidate=found?.point===index?found:bestMatchingEvidence(q,part);
+  const candidate=bestMatchingEvidence(q,part);
   const quote=candidate?.quote||"";
   if(!quote||!revealEvidenceInText(quote,host,returnToQuizFromEvidence)){
-   const info=make("p","source-note","Точне речення не знайдено. Переглянь текст цього пункту — відповідь у тесті збережена.");
-   host.prepend(info);
-   go(box);
+   const info=make("p","source-note","Не вдалося надійно знайти речення, яке підтверджує правильну відповідь. Відповідь у тесті збережена.");
+   const back=make("div","source-inline-return");
+   const btn=make("button","secondary","← Повернутися до запитання");
+   btn.onclick=returnToQuizFromEvidence;back.append(btn);
+   host.prepend(back);host.prepend(info);go(box);
   }
  }catch(error){
   if(version!==loadToken)return;
