@@ -210,6 +210,14 @@ mark.ebook-source-highlight{transition:background-color .2s}
 mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inherit!important;outline:none!important;box-shadow:none!important;border-bottom:2px solid #9b70d6;border-radius:2px;padding:1px 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 :root[data-theme="dark"] mark.ebook-source-highlight{background:rgba(183,145,244,.3)!important;border-bottom-color:#d1b3ff}
 /* Right-side, persistent teacher chat with a threaded conversation. */
+/* Keep the floating teacher control away from quiz navigation on narrow screens. */
+#quiz,#review,#finished,#evidenceView{scroll-margin-bottom:105px}
+.quiz-report{font-size:12px;min-height:36px;padding:7px 11px;margin:8px 0 4px;opacity:.85}
+@media(max-width:700px){
+ main{padding-bottom:125px}
+ #quiz,#review,#finished,#evidenceView{padding-bottom:105px}
+ .teacher-fab{bottom:max(12px,env(safe-area-inset-bottom));right:12px;max-width:145px}
+}
 .teacher-fab{position:fixed;right:20px;bottom:20px;z-index:29;background:var(--green);color:var(--bg);padding:12px 17px;border:1px solid var(--line);box-shadow:0 8px 30px #301b6140;border-radius:99px;font-size:14px;font-weight:800}
 .teacher-panel{position:fixed;right:16px;top:88px;bottom:18px;width:min(370px,calc(100vw - 32px));z-index:30;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 45px #2914442b;display:flex;flex-direction:column;overflow:hidden}
 .teacher-panel[hidden],.evidence-view[hidden]{display:none!important}
