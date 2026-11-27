@@ -571,23 +571,41 @@ function fullSentenceContaining(text,quote){
 
 function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))){
  if(!quote)return false;
- for(const previous of area.querySelectorAll("mark.ebook-source-highlight"))
-  previous.replaceWith(document.createTextNode(previous.textContent));
+ for(const previous of area.querySelectorAll("mark.ebook-source-highlight")){
+  previous.replaceWith(...Array.from(previous.childNodes));
+ }
  for(const previous of area.querySelectorAll(".source-inline-return"))previous.remove();
- for(const el of area.querySelectorAll("p, li, td, dd, blockquote, figcaption")){
-  const literal=el.textContent||"";
-  const sentence=fullSentenceContaining(literal,quote);
+ // Search within rendered blocks rather than requiring an element to have no
+ // nested markup. The latter silently skipped quotes inside emphasis/links.
+ const selectors="p, li, td, th, dd, dt, blockquote, figcaption, .ebook-fact, .ebook-source";
+ const nodes=Array.from(area.querySelectorAll(selectors)).filter(el=>
+   !el.querySelector("p, li, td, th, dd, dt, blockquote, figcaption"));
+ for(const el of nodes){
+  const full=el.textContent||"";
+  const sentence=fullSentenceContaining(full,quote);
   if(!sentence)continue;
-  // Keep charts and other structured elements intact.
-  if(Array.from(el.children).some(node=>node.tagName!=="MARK"))continue;
-  const mark=make("mark","ebook-source-highlight",literal.slice(sentence.start,sentence.end));
+  const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+  const segments=[];let cursor=0,node;
+  while((node=walker.nextNode())){
+   if(node.parentElement?.closest("button,script,style"))continue;
+   const next=cursor+node.textContent.length;
+   segments.push({node,start:cursor,end:next});cursor=next;
+  }
+  const first=segments.find(x=>x.end>sentence.start);
+  const last=segments.find(x=>x.end>=sentence.end);
+  if(!first||!last)continue;
+  const range=document.createRange();
+  range.setStart(first.node,sentence.start-first.start);
+  range.setEnd(last.node,sentence.end-last.start);
+  const mark=make("mark","ebook-source-highlight");
+  mark.append(range.extractContents());
+  range.insertNode(mark);
   const back=make("span","source-inline-return");
   const button=make("button","secondary","← Повернутися до запитання");
-  button.onclick=onBack;
-  back.append(button);
-  el.replaceChildren(document.createTextNode(literal.slice(0,sentence.start)),
-    mark,back,document.createTextNode(literal.slice(sentence.end)));
-  const details=el.closest("details");if(details)details.open=true;
+  button.onclick=onBack;back.append(button);
+  // Exactly one return button, directly after the highlighted answer.
+  mark.after(back);
+  const details=mark.closest("details");if(details)details.open=true;
   mark.scrollIntoView({behavior:"smooth",block:"center"});
   return true;
  }
@@ -674,11 +692,11 @@ function candidateEvidenceSentences(q,part){
  const answer=String(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"").trim();
  const answerTerms=evidenceTerms(answer),questionTerms=evidenceTerms(q.question||"");
  const extraTerms=evidenceTerms(q.explanation||"");
- const quote=String(q.sourceSentence||q.sourceQuote||"").trim();
+ const quote=String(q.sourceQuote||q.sourceSentence||"").trim();
  const normQuote=normalizedSourceText(quote),normAnswer=normalizedSourceText(answer);
  const choices=[];
  for(const passage of evidencePassages(part)){
-  const quoteIsHere=normQuote.length>15&&normalizedSourceText(passage).includes(normQuote);
+  const quoteIsHere=normQuote.length>=20&&normalizedSourceText(passage).includes(normQuote);
   const linked=quoteIsHere?fullSentenceContaining(passage,quote):null;
   for(const sentence of textbookSentenceRanges(passage)){
    if(sentence.text.split(/\s+/u).length<3)continue;
@@ -687,13 +705,14 @@ function candidateEvidenceSentences(q,part){
    const questionHits=questionTerms.filter(t=>tokens.has(t)).length;
    const extraHits=extraTerms.filter(t=>tokens.has(t)).length;
    const phraseMatch=normAnswer.length>=5&&normalized.includes(normAnswer);
-   const manual=typeof q.sourceSentence==="string"&&normalized===normalizedSourceText(q.sourceSentence);
    const fromQuote=Boolean(linked&&linked.text===sentence.text);
-   // Direct correct-answer evidence outranks a quote that spans unrelated sentences.
-   const score=answerHits*5+questionHits*1.1+Math.min(3,extraHits)*0.6+
-    (phraseMatch?24:0)+(manual?30:0)+(fromQuote?4:0);
-   const credible=phraseMatch||manual||answerHits>=1&&
-    (answerHits>=Math.min(2,answerTerms.length)||fromQuote&&questionHits>=1);
+   const score=answerHits*7+questionHits*2+Math.min(3,extraHits)+
+     (phraseMatch?40:0)+(fromQuote?35:0);
+   // A verbatim AI source quote is stronger than lexical similarity alone.
+   // For older questions without an anchor, require several thematic hits.
+   const credible=phraseMatch||fromQuote||
+     (answerHits>=1&&(questionHits>=1||answerHits>=2))||
+     (questionHits>=2&&extraHits>=1);
    if(credible)choices.push({quote:sentence.text,score,answerHits,questionHits,fromQuote});
   }
  }
@@ -745,8 +764,12 @@ async function showEvidenceForQuestion(q,feedback,mode){
   else{host.replaceChildren();(part.paragraphs||[]).forEach(p=>host.append(make("p",null,bookTypography(p))))}
   // Exact quotes come from the textbook; old quizzes use the closest passage.
   const candidate=bestMatchingEvidence(q,part);
-  const quote=candidate?.quote||"";
-  if(!quote||!revealEvidenceInText(quote,host,returnToQuizFromEvidence)){
+  // If the best-scored answer cannot be rendered, try the verified AI quote
+  // and the remaining candidates before reporting an actual missing source.
+  const candidates=[candidate?.quote,q.sourceQuote,q.sourceSentence,
+    ...candidateEvidenceSentences(q,part).slice(0,8).map(x=>x.quote)]
+    .filter((v,i,a)=>v&&a.indexOf(v)===i);
+  if(!candidates.some(quote=>revealEvidenceInText(quote,host,returnToQuizFromEvidence))){
    const info=make("p","source-note","Не вдалося надійно знайти речення, яке підтверджує правильну відповідь. Відповідь у тесті збережена.");
    const back=make("div","source-inline-return");
    const btn=make("button","secondary","← Повернутися до запитання");
