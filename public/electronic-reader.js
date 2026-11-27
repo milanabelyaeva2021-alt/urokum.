@@ -656,8 +656,6 @@ function returnToQuizFromEvidence(){
  if(quizState)$("quiz").hidden=false;
  go($("quiz"));
 }
-$("evidenceBackTop").onclick=returnToQuizFromEvidence;
-$("evidenceBackBottom").onclick=returnToQuizFromEvidence;
 function focusEvidenceQuote(value,q){
  return String(value||"").trim();
 }
