@@ -597,7 +597,9 @@ function evidenceTerms(text){
   const token=raw.replace(",",".");
   if(token.length<4&&!["сша","упа","оон","оун"].includes(token))continue;
   if(evidenceStopWords.has(token))continue;
-  result.add(/^\d/u.test(token)?token:token.slice(0,7));
+  // Ukrainian declensions: «гласність»/«гласності», «Японія»/«Японії»,
+  // «Німеччина»/«Німеччини» must count as the same historical term.
+  result.add(/^\d/u.test(token)?token:token.slice(0,token.length>=6?5:token.length));
  }
  return [...result];
 }
