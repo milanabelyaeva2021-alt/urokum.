@@ -165,7 +165,7 @@ async function showParagraphSummary(){
  }
 }
 // Progress belongs to the learner; transfer via local JSON rather than insecure shared server files.
-const TRANSFER_KEYS=[SAVE,DONE,REVIEW_DONE,SKIPPED,QUIZ_CACHE,ATTEMPTS,FONT_SIZE,REVIEW_QUIZ_CACHE,SPACED_KEY];
+const TRANSFER_KEYS=[SAVE,DONE,REVIEW_DONE,SKIPPED,QUIZ_CACHE,ATTEMPTS,FONT_SIZE,REVIEW_QUIZ_CACHE,SPACED_KEY,RETELL_KEY];
 $("exportProgress").onclick=()=>{
  const values={};
  for(const key of TRANSFER_KEYS){
@@ -1300,9 +1300,13 @@ async function sendTeacherMessage(){
    try{source=(await fetchPoint(lessonIndex,context.sourcePoint-1)).text||source}catch{}
   }else if(quizState?.mode==="review")source=quizState.sourceText||source;
   const history=previous.map(m=>({role:m.role,content:m.content.slice(0,650)}));
+  const pendingQuiz=Boolean(quizState?.questions?.[quizState.index]&&
+   !quizState?.results?.[quizState.index]);
   const data=await aiCall("ask-question",{
    text:String(source).slice(0,14500),question:text,chatHistory:history,
-   ...(context?{quizContext:context}:{})
+   hintOnly:pendingQuiz,
+   ...(context?{quizContext:pendingQuiz?
+    {question:context.question,sourcePoint:context.sourcePoint}:context}:{})
   },40000);
   saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:data.answer||"Не вдалося отримати пояснення."}],key);
  }catch(error){
