@@ -808,7 +808,7 @@ app.post("/api/tutor", aiLimiter, async (req, res) => {
           const set=new Set(words(a));return words(b).filter(x=>set.has(x)).length;
         };
         const yearRange=value=>{
-          const m=String(value||"").match(/\\b(1[89]\\d{2}|20\\d{2})\\s*[–—-]\\s*(1[89]\\d{2}|20\\d{2})\\b/u);
+          const m=String(value||"").match(/\b(1[89]\d{2}|20\d{2})\s*[–—-]\s*(1[89]\d{2}|20\d{2})\b/u);
           return m?[Number(m[1]),Number(m[2])]:null;
         };
         for(const item of qs){
