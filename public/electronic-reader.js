@@ -429,7 +429,10 @@ function validQuestion(q,index,mode="point"){
 // Older cached quizzes are repaired locally, without spending AI requests.
 function anchorPointQuestions(questions,part){
  return questions.map(q=>{
-  const found=bestMatchingEvidence(q,part);
+  // Old cached automatic anchors can be wrong. Re-evaluate the answer from
+  // scratch first, then consider an exact AI-provided source as a fallback.
+  const {sourceSentence,...freshQuestion}=q;
+  const found=bestMatchingEvidence(freshQuestion,part)||bestMatchingEvidence(q,part);
   return found?{...q,sourceSentence:found.quote}:q;
  });
 }
@@ -603,15 +606,53 @@ function findEvidencePoint(quote){
 // We score individual text passages using the question AND its correct answer.
 // If confidence is too low, jump to the reading passage without a false highlight.
 const evidenceStopWords=new Set(("який яка які яке коли куди чому для через після перед було були була буде років року роках час чим що хто як це цей цих при між через про свою своєї своїх до від над під із та або але не на у в за по його їх вона вони має мала підручник текст параграф пункт якій котрий тієї часів вкажи назви поясни правильну відповідь відповідний історії історичний період періоду друга світова війна").split(/\s+/u));
+// Numeric answers may be written in the textbook as words: 6 = «шість».
+// Canonical numbers prevent accidentally treating digits inside a date as an answer.
+function evidenceNumber(token){
+ const w=String(token||"").toLocaleLowerCase("uk").replace(/[ʼ’']/gu,"");
+ if(/^\d+(?:[,.]\d+)?$/u.test(w))return w.replace(",",".");
+ const words=[
+ ["0",/^(нуль|нуля|нулю)$/u],
+ ["1",/^(один|одна|одне|однієї|одного|одну|одним|одні|однією)$/u],
+ ["2",/^(два|дві|двох|двома|двом)$/u],
+ ["3",/^(три|трьох|трьома|трьом)$/u],
+ ["4",/^(чотири|чотирьох|чотирма|чотирьом)$/u],
+ ["5",/^(пять|пяти|пятьох|пятьма)$/u],
+ ["6",/^(шість|шести|шістьох|шістьма|шестеро)$/u],
+ ["7",/^(сім|семи|сімох|сімома|семеро)$/u],
+ ["8",/^(вісім|восьми|вісьмох|вісьмома|восьмеро)$/u],
+ ["9",/^(девять|девяти|девятьох|девятьма)$/u],
+ ["10",/^(десять|десяти|десятьох|десятьма)$/u],
+ ["11",/^(одинадцять|одинадцяти)$/u],
+ ["12",/^(дванадцять|дванадцяти)$/u],
+ ["13",/^(тринадцять|тринадцяти)$/u],
+ ["14",/^(чотирнадцять|чотирнадцяти)$/u],
+ ["15",/^(пятнадцять|пятнадцяти)$/u],
+ ["16",/^(шістнадцять|шістнадцяти)$/u],
+ ["17",/^(сімнадцять|сімнадцяти)$/u],
+ ["18",/^(вісімнадцять|вісімнадцяти)$/u],
+ ["19",/^(девятнадцять|девятнадцяти)$/u],
+ ["20",/^(двадцять|двадцяти)$/u],
+ ["30",/^(тридцять|тридцяти)$/u],
+ ["40",/^(сорок|сорока)$/u],
+ ["50",/^(пятдесят|пятдесяти)$/u],
+ ["60",/^(шістдесят|шістдесяти)$/u],
+ ["70",/^(сімдесят|сімдесяти)$/u],
+ ["80",/^(вісімдесят|вісімдесяти)$/u],
+ ["90",/^(девяносто|девяноста)$/u],
+ ["100",/^(сто|ста)$/u]
+ ];
+ return words.find(([,pattern])=>pattern.test(w))?.[0]||null;
+}
 function evidenceTerms(text){
  const result=new Set();
- for(const raw of String(text||"").toLocaleLowerCase("uk").match(/[\p{L}\p{N}]+(?:[,.][0-9]+)?/gu)||[]){
+ for(const raw of String(text||"").toLocaleLowerCase("uk").match(/[\p{L}\p{N}]+(?:[ʼ’'][\p{L}]+|[,.][0-9]+)?/gu)||[]){
   const token=raw.replace(",",".");
+  const number=evidenceNumber(token);
+  if(number!==null){result.add(number);continue}
   if(token.length<4&&!["сша","упа","оон","оун"].includes(token))continue;
   if(evidenceStopWords.has(token))continue;
-  // Ukrainian declensions: «гласність»/«гласності», «Японія»/«Японії»,
-  // «Німеччина»/«Німеччини» must count as the same historical term.
-  result.add(/^\d/u.test(token)?token:token.slice(0,token.length>=6?5:token.length));
+  result.add(token.slice(0,token.length>=6?5:token.length));
  }
  return [...result];
 }
