@@ -498,6 +498,46 @@ function availableEvidenceQuote(q){
  const old=String(q?.explanation||q?.referenceAnswer||"").trim();
  return old.length>=30?old:"";
 }
+// Treat evidence as a complete textbook sentence, never an arbitrary window of words.
+function textbookSentenceRanges(text){
+ const source=String(text||""),ranges=[];let start=0;
+ for(let i=0;i<source.length;i++){
+  if(!/[.!?]/u.test(source[i]))continue;
+  // Do not break after common Ukrainian abbreviations or years ("1945 р.").
+  const word=source.slice(Math.max(start,i-12),i+1);
+  if(/\b(?:р|рр|ст|тис|млн|млрд|ім|н|пор|див|рис|табл)\.$/iu.test(word))continue;
+  if(/\d\.\d/u.test(source.slice(Math.max(0,i-1),i+2)))continue;
+  let after=i+1;
+  while(after<source.length&&/[»”’"')\]]/u.test(source[after]))after++;
+  const next=source.slice(after).match(/^\s+/u);
+  if(!next)continue;
+  const nextStart=after+next[0].length;
+  if(nextStart>=source.length||/[А-ЯІЇЄҐA-Z«„“"0-9]/u.test(source[nextStart])){
+   if(source.slice(start,after).trim())ranges.push({start,end:after,text:source.slice(start,after).trim()});
+   start=nextStart;
+  }
+ }
+ if(source.slice(start).trim()){
+  const trimmed=source.slice(start);
+  const trailing=trimmed.length-trimmed.trimEnd().length;
+  ranges.push({start,end:source.length-trailing,text:trimmed.trim()});
+ }
+ return ranges;
+}
+function fullSentenceContaining(text,quote){
+ const bounds=evidenceBounds(text,quote);
+ if(!bounds)return null;
+ const sentences=textbookSentenceRanges(text);
+ if(!sentences.length)return null;
+ // If a quote straddles two sentences, select the one with the biggest overlap.
+ let chosen=null,bestOverlap=0;
+ for(const sentence of sentences){
+  const overlap=Math.max(0,Math.min(sentence.end,bounds.end)-Math.max(sentence.start,bounds.start));
+  if(overlap>bestOverlap){chosen=sentence;bestOverlap=overlap}
+ }
+ return chosen&&bestOverlap>=Math.min(15,bounds.end-bounds.start)?chosen:null;
+}
+
 function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))){
  if(!quote)return false;
  // Only one clue at a time; older highlights should not remain on the page.
@@ -506,8 +546,9 @@ function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))
  }
  for(const previous of area.querySelectorAll(".source-back-link"))previous.remove();
  for(const el of area.querySelectorAll("p, li, td, dd, blockquote")){
-  const literal=el.textContent||"",bounds=evidenceBounds(literal,quote);
-  if(!bounds)continue;
+  const literal=el.textContent||"",sentence=fullSentenceContaining(literal,quote);
+  if(!sentence)continue;
+  const bounds={start:sentence.start,end:sentence.end};
   // These ebook blocks have a single text payload; do not destroy nested markup.
   const unexpectedMarkup=Array.from(el.children).some(x=>x.tagName!=="MARK");
   if(unexpectedMarkup)continue;
@@ -564,25 +605,20 @@ function evidencePassages(part){
  return collected.filter(x=>String(x).trim().length>25);
 }
 function bestMatchingEvidence(q,part){
- const expectedAnswer=q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"";
- const strong=evidenceTerms(expectedAnswer),question=evidenceTerms(q.question);
- const explanation=evidenceTerms(q.explanation||"");
+ const answer=q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"";
+ const strong=evidenceTerms(answer),question=evidenceTerms(q.question),expl=evidenceTerms(q.explanation||"");
  let best=null;
- for(const content of evidencePassages(part)){
-  const words=[...content.matchAll(/\S+/gu)];
-  if(words.length<5)continue;
-  for(let left=0;left<words.length;left+=words.length>45?6:words.length){
-   const right=Math.min(words.length,left+Math.min(40,words.length));
-   const fragment=content.slice(words[left].index,words[right-1].index+words[right-1][0].length);
-   const tokens=new Set(evidenceTerms(fragment));
-   const strongMatches=strong.filter(t=>tokens.has(t)).length;
-   const qMatches=question.filter(t=>tokens.has(t)).length;
-   const otherMatches=explanation.filter(t=>tokens.has(t)).length;
-   const score=strongMatches*3+qMatches*1.5+Math.min(2,otherMatches)*.35;
-   const credible=(strongMatches>=1&&(qMatches>=1||strongMatches>=2))||
-     (qMatches>=3&&score>=5.4);
-   if(credible&&score>=4.5 && (!best||score>best.score))
-    best={quote:fragment,score};
+ for(const paragraph of evidencePassages(part)){
+  for(const sentence of textbookSentenceRanges(paragraph)){
+   if(sentence.text.split(/\s+/u).length<5)continue;
+   const tokens=new Set(evidenceTerms(sentence.text));
+   const answerHits=strong.filter(t=>tokens.has(t)).length;
+   const qHits=question.filter(t=>tokens.has(t)).length;
+   const explHits=expl.filter(t=>tokens.has(t)).length;
+   const score=answerHits*4+qHits*1.6+Math.min(2,explHits)*.3;
+   // Do not highlight a sentence merely because it mentions a generic era.
+   if(answerHits<1||score<5.3)continue;
+   if(!best||score>best.score)best={quote:sentence.text,score};
   }
  }
  return best;
@@ -599,8 +635,13 @@ function determineEvidence(q,mode){
  for(const index of selected){
   const part=textCache.get(lessonIndex+":"+index)||(index===pointIndex?current:null);
   if(!part)continue;
-  if(original&&evidencePassages(part).some(text=>evidenceBounds(text,original)))
-   return {point:index,quote:original,exact:true};
+  if(original&&evidencePassages(part).some(text=>evidenceBounds(text,original))){
+   const match=evidencePassages(part).map(text=>fullSentenceContaining(text,original)).find(Boolean);
+   const answer=evidenceTerms(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"");
+   const sentenceTokens=new Set(evidenceTerms(match?.text||""));
+   if(match && (answer.some(term=>sentenceTokens.has(term)) || typeof q.sourceQuote==="string"))
+    return {point:index,quote:match.text,exact:true,score:100};
+  }
   const candidate=bestMatchingEvidence(q,part);
   if(candidate&&(!best||candidate.score>best.score))
    best={point:index,quote:candidate.quote,score:candidate.score,exact:false};
@@ -617,13 +658,7 @@ function returnToQuizFromEvidence(){
 $("evidenceBackTop").onclick=returnToQuizFromEvidence;
 $("evidenceBackBottom").onclick=returnToQuizFromEvidence;
 function focusEvidenceQuote(value,q){
- const words=String(value||"").split(/\s+/u).filter(Boolean);
- if(words.length<=20)return words.join(" ");
- const important=evidenceTerms(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"");
- let focus=words.findIndex(w=>evidenceTerms(w).some(t=>important.includes(t)));
- if(focus<0)focus=Math.floor(words.length/2);
- const start=Math.min(Math.max(0,focus-6),words.length-19);
- return words.slice(start,start+19).join(" ");
+ return String(value||"").trim();
 }
 async function showEvidenceForQuestion(q,feedback,mode){
  const savedState=quizState,version=loadToken;
@@ -645,7 +680,7 @@ async function showEvidenceForQuestion(q,feedback,mode){
   else{host.replaceChildren();(part.paragraphs||[]).forEach(p=>host.append(make("p",null,bookTypography(p))))}
   // Exact quotes come from the textbook; old quizzes use the closest passage.
   const candidate=found?.point===index?found:bestMatchingEvidence(q,part);
-  const quote=candidate?.quote?focusEvidenceQuote(candidate.quote,q):"";
+  const quote=candidate?.quote||"";
   if(!quote||!revealEvidenceInText(quote,host,returnToQuizFromEvidence)){
    const info=make("p","source-note","Точне речення не знайдено. Переглянь текст цього пункту — відповідь у тесті збережена.");
    host.prepend(info);
@@ -668,7 +703,9 @@ function showQuestion(){
  card.append(label,make("p","qNo","Запитання "+(index+1)+" із "+state.questions.length),
   make("h2","questionText",q.question));
  const feedback=make("div","quizFeedback");feedback.hidden=true;
- let verified=false;
+ let verified=false,verifyButton=null,skipButton=null;
+ activeTeacherQuizContext=questionContextFromQuiz(q,state.results[index]);
+ refreshTeacherContext();
  const current=()=>quizState===state&&state.index===index&&loadToken===state.loadVersion;
  const next=make("button","primary",index===state.questions.length-1?
    "Завершити перевірку":"Наступне запитання →");
@@ -681,6 +718,9 @@ function showQuestion(){
  const record=(result,message)=>{
   if(verified||!current())return;
   verified=true;state.results[index]={question:q.question,type:q.type||"choice",...result};
+  verifyButton?.remove();skipButton?.remove();
+  activeTeacherQuizContext=questionContextFromQuiz(q,result);
+  refreshTeacherContext();
   if(result.status==="correct")state.done=(state.done||0)+1;
   feedback.hidden=false;
   feedback.className="quiz-feedback-box "+(result.status==="correct"?"is-correct":
@@ -689,14 +729,11 @@ function showQuestion(){
   if(result.status==="wrong"){
    const find=make("button","secondary","📖 Показати в тексті");
    find.onclick=()=>showEvidenceForQuestion(q,feedback,state.mode);
-   const row=make("div","source-back-link");row.append(find);
-   const askWhy=make("button","secondary","💬 Запитати ШІ, чому так");
-   askWhy.onclick=()=>openTeacherForQuestion(q,result);
-   row.append(askWhy);card.append(row);
+   const row=make("div","source-back-link");row.append(find);card.append(row);
   }
   card.append(next);go(feedback);
  };
- const skipOne=make("button","secondary",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");
+ const skipOne=make("button","secondary",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");skipButton=skipOne;
  skipOne.onclick=()=>{
   if(verified||!current())return;
   verified=true;state.skipped=(state.skipped||0)+1;
@@ -710,7 +747,7 @@ function showQuestion(){
   const hint=make("p","small","Відповідай своїми словами: ШІ перевірить зміст, а не дослівний збіг.");
   const input=make("textarea","written");input.rows=5;input.maxLength=1800;
   input.placeholder="Моя відповідь…";
-  const check=make("button","primary","Перевірити письмову відповідь");
+  const check=make("button","primary","Перевірити письмову відповідь");verifyButton=check;
   check.onclick=async()=>{
    if(verified||!current())return;
    const answer=input.value.trim();
@@ -749,7 +786,7 @@ function showQuestion(){
   return button;
  });
  buttons.forEach(b=>answers.append(b));
- const check=make("button","primary","Перевірити відповідь");
+ const check=make("button","primary","Перевірити відповідь");verifyButton=check;
  check.onclick=()=>{
   if(verified||!current())return;
   if(chosen<0){feedback.hidden=false;feedback.textContent="Спочатку вибери відповідь.";return}
@@ -878,10 +915,7 @@ function showCompletion(already){
  const again=make("button","secondary",incomplete?"Пройти 5 запитань":"↻ Пройти пункт ще раз");
  again.onclick=startQuiz;secondary.append(again);
  if(finalPoint){
-  const retryParagraph=make("button","secondary","↻ Пройти параграф знову");
-  retryParagraph.onclick=restartParagraph;secondary.append(retryParagraph);
-  const retell=make("button","secondary","✍️ Переказати параграф");
-  retell.onclick=openRetelling;secondary.append(retell);
+
  }
  extra.append(secondary);host.append(extra);
  if(finalPoint)showParagraphSummary();
@@ -1014,8 +1048,9 @@ function renderTeacherMessages(){
   host.append(make("p","teacher-empty","Привіт! Запитай про події з підручника або про відповідь у тесті. Я запам’ятаю нашу розмову, і ти зможеш продовжити її пізніше."));
  }else for(const message of messages){
   const card=make("div","teacher-message "+(message.role==="user"?"user":"assistant"));
-  card.append(make("span","message-role",message.role==="user"?"Ти":"Учитель-ШІ"));
-  card.append(make("span",null,String(message.content||"")));
+  const body=make("div","message-body");
+  explainMarkup(body,String(message.content||""));
+  card.append(body);
   host.append(card);
  }
  host.scrollTop=host.scrollHeight;
