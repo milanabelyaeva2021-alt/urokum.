@@ -41,6 +41,8 @@ function recordSpaced(state){
  const entries=Object.entries(spaced);if(entries.length>200)spaced=Object.fromEntries(entries.slice(-200));
  toStore(SPACED_KEY,spaced);renderDueCards();
 }
+const RETELL_KEY="urokum:retell-submitted:"+BOOK;
+let retellDone=fromStore(RETELL_KEY,{});
 const TEACHER_CHAT_KEY="urokum:teacher-history:"+BOOK;
 const TEACHER_OPEN_KEY="urokum:teacher-panel-open:"+BOOK;
 let teacherChats=fromStore(TEACHER_CHAT_KEY,{});
@@ -134,6 +136,7 @@ async function showParagraphSummary(){
  const retell=make("button","secondary recap-retell","✍️ Переказати своїми словами");
  retell.onclick=openRetelling;recap.append(retell);
  const expand=make("details","synopsis-toggle");
+  expand.hidden=!retellDone[lesson.id];
  expand.append(make("summary",null,"📅 Основні дати і події"));
  const body=make("div","synopsis-content");
  body.append(make("p","small","Готую перелік дат і подій…"));
@@ -494,7 +497,7 @@ async function startQuiz(){
  const card=$("quiz");card.hidden=false;card.replaceChildren();
  card.append(make("span","pill","Навчальна зупинка"),make("h2",null,"Перевіримо, що ти зрозумів(ла)"));
  const status=make("p","small","ШІ готує 5 запитань: 4 з варіантами відповідей і 1 письмове.");
- const skip=make("button","secondary","Пропустити перевірку →");skip.onclick=skipCheckpoint;
+ const skip=make("button","secondary quiz-skip","Пропустити перевірку →");skip.onclick=skipCheckpoint;
  card.append(status,skip);go(card);
  const version=loadToken,attempt=++quizRun;
  try{
@@ -638,7 +641,7 @@ function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))
   button.onclick=onBack;back.append(button);
   // Exactly one return button, directly after the highlighted answer.
   mark.after(back);
-  const details=mark.closest("details");if(details)details.open=true;
+  const details=mark.closest("details");if(details){details.hidden=false;details.open=true;}
   mark.scrollIntoView({behavior:"smooth",block:"center"});
   return true;
  }
@@ -876,7 +879,7 @@ function showQuestion(){
   }
   card.append(next);go(feedback);
  };
- const skipOne=make("button","secondary",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");skipButton=skipOne;
+ const skipOne=make("button","secondary quiz-skip",q.type==="open"?"Пропустити письмову відповідь →":"Пропустити запитання →");skipButton=skipOne;
  skipOne.onclick=()=>{
   if(verified||!current())return;
   verified=true;state.skipped=(state.skipped||0)+1;
@@ -1031,17 +1034,18 @@ function showCompletion(already){
  }else host.append(make("p","small","Можна продовжити читання та повернутися до перевірки пізніше."));
  const primary=make("div","completion-main-actions");
  if(finalPoint){
-  const test=make("button","primary","📝 Самостійна робота");
+  const test=make("button","primary","Далі: самостійна робота →");
   test.onclick=startParagraphReview;primary.append(test);
  }
  const goNext=make("button",finalPoint?"secondary":"primary",
   finalPoint?(lessonIndex<lessons.length-1?"Наступний параграф →":"Книгу пройдено ✓"):
    "Наступний пункт →");
- goNext.onclick=()=>nextPoint();primary.append(goNext);
+ goNext.onclick=()=>nextPoint();if(!finalPoint)primary.append(goNext);
  host.append(primary);
  const extra=make("details","completion-more");
  extra.append(make("summary",null,"Додаткові дії"));
  const secondary=make("div","actions");
+  if(finalPoint)secondary.append(goNext);
  if(attempt){
   const mistakes=addMistakeReview(extra,attempt);
   const reviewButton=make("button","secondary","Переглянути помилки");
@@ -1170,6 +1174,7 @@ function openRetelling(){
   const version=loadToken;
   try{
    const text=await fullParagraphText();if(version!==loadToken)return;
+   retellDone[lessons[lessonIndex].id]=true;toStore(RETELL_KEY,retellDone);compare.hidden=false;
    const result=await aiCall("assess-retelling",{text,retelling:input.value.trim()});
    if(version!==loadToken)return;
    explainMarkup(responseHost,result.answer||"Відгук недоступний.");
@@ -1177,6 +1182,7 @@ function openRetelling(){
   finally{check.disabled=false}
  };
  const compare=make("button","secondary","📅 Переглянути основні дати і події");
+  compare.hidden=!retellDone[lessons[lessonIndex].id];
  compare.onclick=()=>{
   host.hidden=true;showCompletion(true);
   const summary=$("paragraphSummary");
