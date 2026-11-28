@@ -308,6 +308,18 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
 }
 .fixed-question-row.answer-correct select,.fixed-question-row.answer-correct input{background:inherit;color:inherit}
 .fixed-question-row.answer-wrong select,.fixed-question-row.answer-wrong input{background:inherit;color:inherit}
+
+.teacher-message-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;opacity:.86}
+.teacher-message-action{background:transparent!important;border:1px solid transparent!important;color:inherit!important;font-size:11px;line-height:1.4;padding:5px 7px;border-radius:7px;cursor:pointer}
+.teacher-message-action:hover,.teacher-message-action:focus-visible{border-color:currentColor!important;text-decoration:underline}
+.teacher-message.user .teacher-message-action{color:#fff!important}
+.teacher-message.assistant .teacher-message-action{color:var(--muted)!important}
+.teacher-action-danger:hover{color:#db4444!important}
+.teacher-edit-input{display:block;width:100%;min-height:80px;resize:vertical;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 11px;font:inherit;line-height:1.5}
+.teacher-edit-controls{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin:7px 0}
+.teacher-edit-controls .primary{padding:7px 11px;min-height:32px;font-size:12px}
+.teacher-message:has(.teacher-edit-input){width:100%;max-width:100%;background:var(--card);border:1px solid var(--line);color:var(--ink)}
+.teacher-message:has(.teacher-edit-input) .teacher-message-action{color:var(--muted)!important}
 </style>
 </head>
 <body>
