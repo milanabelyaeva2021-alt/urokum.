@@ -1503,6 +1503,22 @@ $("studentQuestion").addEventListener("keydown",event=>{
   if(!teacherBusy)sendTeacherMessage();
  }
 });
+function preciseMatchingTutorAnswer(context,request){
+ if(context?.questionType!=="match"||!context.answerSubmitted||
+   !Array.isArray(context.correctMapping)||!context.correctMapping.length)return null;
+ // Use the verified key when the student asks why an association is correct.
+ if(!/(чому|поясн|відповід|правильн|варіант|літер|букв|помил|збіга|^\s*[1-4]\b)/iu.test(request))return null;
+ const nums=String(request).match(/(?:^|[^\d])([1-4])(?=\s|[.,:;!?\-–—]|$)/gu)||[];
+ const requested=new Set(nums.map(x=>Number(x.match(/[1-4]/u)?.[0])));
+ const rows=requested.size?context.correctMapping.filter(x=>requested.has(x.row)):context.correctMapping;
+ const lines=rows.map(x=>(context.questionRows?.[x.row-1]||("Пункт "+x.row))+" — "+x.letter+". "+x.answer);
+ const explanation=requested.has(3)||requested.has(4)?
+  "1985–1991 рр. — час відновлення незалежності України, а 1991–2005 рр. — становлення вже незалежної держави. Це різні послідовні етапи.":
+  "Зіставляй часові межі з назвою кожного періоду в підручнику.";
+ return (requested.size?"Пояснення для вибраних пунктів:":"Правильна відповідність:")+"\n"+
+  lines.join("\n")+"\n"+explanation+
+  (context.chosenAnswer?" Твоя відповідь: "+context.chosenAnswer+".":"");
+}
 async function sendTeacherMessage(){
  const field=$("studentQuestion"),text=field.value.trim();
  if(text.length<3){field.focus();return}
@@ -1526,6 +1542,10 @@ async function sendTeacherMessage(){
   const history=previous.map(m=>({role:m.role,content:m.content.slice(0,650)}));
   const pendingQuiz=Boolean(quizState?.questions?.[quizState.index]&&
    !quizState?.results?.[quizState.index]);
+  const exactAnswer=!pendingQuiz?preciseMatchingTutorAnswer(context,text):null;
+  if(exactAnswer){
+   saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:exactAnswer}],key);
+  }else{
   const data=await aiCall("ask-question",{
    text:String(source).slice(0,14500),question:text,chatHistory:history,
    hintOnly:pendingQuiz,
@@ -1533,6 +1553,7 @@ async function sendTeacherMessage(){
     {question:context.question,questionType:context.questionType,sourcePoint:context.sourcePoint,questionRows:context.questionRows,answerOptions:context.answerOptions}:context}:{})
   },40000);
   saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:data.answer||"Не вдалося отримати пояснення."}],key);
+  }
  }catch(error){
   saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:"ШІ тимчасово не відповідає: "+error.message}],key);
  }finally{
