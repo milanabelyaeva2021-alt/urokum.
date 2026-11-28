@@ -9,38 +9,6 @@ let lessons=[],points={},current=null,lessonIndex=0,pointIndex=0,loadToken=0;
 let completed=new Set(),reviews=new Set(),skipped=new Set(),quizState=null,quizRun=0;
 let locallySavedQuestions={},locallySavedReviews={},pointAttempts={},readerFontSize=19;
 const textCache=new Map(),summaryCache=new Map();
-const SPACED_KEY="urokum:spaced:"+BOOK;
-let spaced=fromStore(SPACED_KEY,{});
-function dueCards(){return Object.values(spaced).filter(x=>x&&x.due<=Date.now())}
-function renderDueCards(){
- $("spacedDue")?.remove();
- const panel=make("section","spaced-review");panel.id="spacedDue";
- const due=dueCards();
- panel.append(make("strong",null,"🔁 На повторення сьогодні"),make("span","small",due.length+" запитань"));
- if(due.length){
-  const btn=make("button","primary","Повторити зараз");
-  btn.onclick=()=>{quizState={questions:due.slice(0,12).map(x=>x.q),cardIds:due.slice(0,12).map(x=>x.id),index:0,mode:"spaced",done:0,results:[],loadVersion:loadToken};
-   $("readerArticle").hidden=true;$("finished").hidden=true;$("review").hidden=true;$("paragraphSummary").hidden=true;showQuestion();go($("quiz"))};
-  panel.append(btn);
- }
- $("readerArticle").before(panel);
-}
-function recordSpaced(state){
- if(state.mode==="spaced"){
-  state.cardIds.forEach((id,i)=>{const card=spaced[id];if(!card)return;
-   if(state.results[i]?.status==="correct"){card.step++;if(card.step>=3)delete spaced[id];
-    else card.due=Date.now()+[1,3,7][card.step]*86400000}
-   else{card.step=0;card.due=Date.now()+86400000}
-  });
- }else{
-  state.questions.forEach((q,i)=>{if(!state.results[i]||state.results[i].status==="correct")return;
-   const id=pointId()+":"+q.question.slice(0,120);
-   if(!spaced[id])spaced[id]={id,q,step:0,due:Date.now()+86400000};
-  });
- }
- const entries=Object.entries(spaced);if(entries.length>200)spaced=Object.fromEntries(entries.slice(-200));
- toStore(SPACED_KEY,spaced);renderDueCards();
-}
 const RETELL_KEY="urokum:retell-submitted:"+BOOK;
 let retellDone=fromStore(RETELL_KEY,{});
 const TEACHER_CHAT_KEY="urokum:teacher-history:"+BOOK;
@@ -165,7 +133,7 @@ async function showParagraphSummary(){
  }
 }
 // Progress belongs to the learner; transfer via local JSON rather than insecure shared server files.
-const TRANSFER_KEYS=[SAVE,DONE,REVIEW_DONE,SKIPPED,QUIZ_CACHE,ATTEMPTS,FONT_SIZE,REVIEW_QUIZ_CACHE,SPACED_KEY,RETELL_KEY];
+const TRANSFER_KEYS=[SAVE,DONE,REVIEW_DONE,SKIPPED,QUIZ_CACHE,ATTEMPTS,FONT_SIZE,REVIEW_QUIZ_CACHE,RETELL_KEY];
 $("exportProgress").onclick=()=>{
  const values={};
  for(const key of TRANSFER_KEYS){
@@ -420,7 +388,6 @@ async function loadPoint(i,j){
   const data=await fetchPoint(i,j);
   if(token!==loadToken)return;
   current=data;
-  renderDueCards();
   const lesson=lessons[i];
   $("lessonEyebrow").textContent="Історія України · 11 клас · "+lesson.title.split(".")[0];
   $("lessonTitle").textContent=lesson.title;
@@ -824,7 +791,7 @@ function showQuestion(){
  const index=state.index,q=state.questions[index],card=$("quiz");
  card.hidden=false;card.replaceChildren();
  card.append(quizStepBar(state));
- const label=make("span","pill",state.mode==="spaced"?"Інтервальне повторення":state.mode==="point"?"Навчальна зупинка":
+ const label=make("span","pill",state.mode==="point"?"Навчальна зупинка":
   state.mode==="practice"?"Повторення складного":"Самостійна робота");
  card.append(label,make("p","qNo","Запитання "+(index+1)+" із "+state.questions.length),
   make("h2","questionText",q.question));
@@ -979,12 +946,6 @@ function finishQuiz(mode){
   toStore(DONE,[...completed]);toStore(SKIPPED,[...skipped]);
   showCompletion(false);progress();
   return;
- }
- if(mode==="spaced"){
-  const host=$("finished");host.replaceChildren();host.hidden=false;
-  host.append(make("h2",null,"Повторення завершено"),make("p","small",score+" із "+state.questions.length+" правильних"));
-  const back=make("button","primary","До читання");back.onclick=()=>loadPoint(lessonIndex,pointIndex);
-  host.append(back);go(host);return;
  }
  if(mode==="practice"){
   const host=$("finished");host.replaceChildren();host.hidden=false;
