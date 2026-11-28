@@ -1632,9 +1632,12 @@ function preciseMatchingTutorAnswer(context,request){
  const requested=new Set(nums.map(x=>Number(x.match(/[1-4]/u)?.[0])));
  const rows=requested.size?context.correctMapping.filter(x=>requested.has(x.row)):context.correctMapping;
  const lines=rows.map(x=>(context.questionRows?.[x.row-1]||("Пункт "+x.row))+" — "+x.letter+". "+x.answer);
- const explanation=requested.has(3)||requested.has(4)?
-  "1985–1991 рр. — час відновлення незалежності України, а 1991–2005 рр. — становлення вже незалежної держави. Це різні послідовні етапи.":
-  "Зіставляй часові межі з назвою кожного періоду в підручнику.";
+ const aboutChronology=/хронологічн|період|1985|1991/u.test(context.question||"");
+ const explanation=aboutChronology?
+  (requested.has(3)||requested.has(4)?
+   "1985–1991 рр. — час відновлення незалежності України, а 1991–2005 рр. — становлення вже незалежної держави. Це різні послідовні етапи.":
+   "Зіставляй часові межі з назвою кожного періоду в підручнику."):
+  "Кожному поняттю відповідає одне точне визначення. Порівняй ключові слова поняття та визначення; один варіант залишається зайвим.";
  return (requested.size?"Пояснення для вибраних пунктів:":"Правильна відповідність:")+"\n"+
   lines.join("\n")+"\n"+explanation+
   (context.chosenAnswer?" Твоя відповідь: "+context.chosenAnswer+".":"");
