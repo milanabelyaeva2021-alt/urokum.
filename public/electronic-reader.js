@@ -894,6 +894,70 @@ function showQuestion(){
   if(state.index===state.questions.length)finishQuiz(state.mode);
   else{showQuestion();go($("quiz"))}
  };
+
+ // Fixed, teacher-provided question types: no AI answer key is needed.
+ if(q.type==="match"){
+  const rows=make("div","fixed-question-rows"),selects=[];
+  q.rows.forEach((name,i)=>{
+   const label=make("label","fixed-question-row");label.append(make("strong",null,(i+1)+". "+name));
+   const select=make("select");select.setAttribute("aria-label","Назва періоду "+(i+1));
+   const blank=make("option",null,"Обери назву періоду");blank.value="";select.append(blank);
+   q.options.forEach((value,j)=>{const option=make("option",null,"АБВГҐ"[j]+". "+value);option.value=String(j);select.append(option)});
+   label.append(select);rows.append(label);selects.push(select);
+  });
+  const check=make("button","primary","Перевірити відповідність");verifyButton=check;
+  check.onclick=()=>{
+   if(!current()||verified)return;
+   const values=selects.map(x=>x.value===""?-1:Number(x.value));
+   if(values.includes(-1)){feedback.hidden=false;feedback.textContent="Встанови всі чотири відповідності.";return}
+   const n=values.filter((x,i)=>x===q.answers[i]).length;
+   selects.forEach((el,i)=>{el.disabled=true;el.classList.add(values[i]===q.answers[i]?"field-correct":"field-wrong")});
+   const key=q.answers.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", ");
+   record({status:n===4?"correct":"wrong",userAnswer:values.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "),
+    correctAnswer:key,explanation:key},(n===4?"✓ Правильно! ":"Правильно "+n+" із 4. ")+"Відповідь: "+key+".");
+  };
+  card.append(rows,check,skipOne,feedback);return;
+ }
+ if(q.type==="multi"){
+  const rows=make("div","fixed-question-rows"),boxes=[];
+  q.options.forEach((value,i)=>{
+   const label=make("label","fixed-statement"),box=document.createElement("input");box.type="checkbox";
+   label.append(box,make("span",null,(i+1)+". "+value));rows.append(label);boxes.push(box);
+  });
+  const check=make("button","primary","Перевірити твердження");verifyButton=check;
+  check.onclick=()=>{
+   if(!current()||verified)return;
+   const values=boxes.flatMap((box,i)=>box.checked?[i]:[]);
+   if(values.length!==3){feedback.hidden=false;feedback.textContent="Обери рівно три твердження.";return}
+   const correct=values.every(x=>q.answers.includes(x));
+   boxes.forEach(box=>box.disabled=true);
+   const key=q.answers.map(x=>x+1).join(", ");
+   record({status:correct?"correct":"wrong",userAnswer:values.map(x=>x+1).join(", "),
+    correctAnswer:key,explanation:q.explanation},(correct?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні: "+key+". "+q.explanation);
+  };
+  card.append(rows,check,skipOne,feedback);return;
+ }
+ if(q.type==="short"){
+  const rows=make("div","fixed-question-rows"),inputs=[];
+  q.prompts.forEach((value,i)=>{
+   const label=make("label","fixed-question-row");label.append(make("strong",null,(i+1)+". "+value));
+   const input=make("input");input.type="text";input.placeholder="Ім’я або прізвище";input.autocomplete="off";
+   label.append(input);rows.append(label);inputs.push(input);
+  });
+  const normalize=x=>String(x||"").toLocaleLowerCase("uk").replace(/[’ʼ']/gu,"").replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
+  const check=make("button","primary","Перевірити імена");verifyButton=check;
+  check.onclick=()=>{
+   if(!current()||verified)return;
+   const values=inputs.map(x=>normalize(x.value));
+   if(values.some(x=>!x)){feedback.hidden=false;feedback.textContent="Введи обидва імені.";return}
+   const good=values.map((v,i)=>q.aliases[i].some(a=>normalize(a)===v));
+   inputs.forEach((el,i)=>{el.disabled=true;el.classList.add(good[i]?"field-correct":"field-wrong")});
+   record({status:good.every(Boolean)?"correct":"wrong",userAnswer:inputs.map(x=>x.value).join("; "),
+    correctAnswer:q.answers.join("; "),explanation:q.answers.join("; ")},
+    (good.every(Boolean)?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні відповіді: "+q.answers.map((x,i)=>(i+1)+". "+x).join("; ")+".");
+  };
+  card.append(rows,check,skipOne,feedback);return;
+ }
  if(q.type==="open"){
   const hint=make("p","small","Відповідай своїми словами: ШІ перевірить зміст, а не дослівний збіг.");
   const input=make("textarea","written");input.rows=5;input.maxLength=1800;
