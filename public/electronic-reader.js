@@ -1022,8 +1022,42 @@ function showQuestion(){
    const n=values.filter((x,i)=>x===q.answers[i]).length;
    selects.forEach((el,i)=>{el.disabled=true;el.classList.add(values[i]===q.answers[i]?"field-correct":"field-wrong");el.closest(".fixed-question-row")?.classList.add(values[i]===q.answers[i]?"answer-correct":"answer-wrong")});
    const key=q.answers.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", ");
-   record({status:n===4?"correct":n>0?"partial":"wrong",userAnswer:values.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "),
-    correctAnswer:key,explanation:key},(n===4?"✓ Правильно! ":"Правильно "+n+" із 4. ")+"Відповідь: "+key+".");
+   const status=n===q.answers.length?"correct":n>0?"partial":"wrong";
+   record({status,userAnswer:values.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "),
+    correctAnswer:key,explanation:q.explanation||key},
+    (n===q.answers.length?"✓ Усі відповідності правильні. ":"Правильно "+n+" із "+q.answers.length+". ")+
+    "Правильний ключ: "+key+".");
+   if(n!==q.answers.length){
+    const wrong=q.rows.flatMap((term,i)=>values[i]===q.answers[i]?[]:[{
+     number:i+1,term,
+     studentChoice:"АБВГҐ"[values[i]]+". "+q.options[values[i]],
+     correctChoice:"АБВГҐ"[q.answers[i]]+". "+q.options[q.answers[i]]
+    }]);
+    const explanation=make("div","wrong-match-explanation");
+    explanation.append(make("strong",null,"Пояснення помилок від Учителя-ШІ"));
+    const detail=make("p","small","Учитель-ШІ розбирає неправильні відповідності…");
+    explanation.append(detail);feedback.append(explanation);
+    // If the model is unavailable, explain the semantic difference from
+    // the editor-approved options rather than only repeating letter keys.
+    const fallback=wrong.map(item=>item.number+". «"+item.term+
+     "»: ти вибрав(ла) "+item.studentChoice+
+     ". Цей варіант описує інше поняття. Тут правильне визначення — "+
+     item.correctChoice+".").join("\n");
+    const version=loadToken;
+    aiCall("explain-wrong-matches",{
+     text:String(current?.text||globalLessonText()).slice(0,14000),
+     wrongMatches:wrong
+    },40000).then(data=>{
+     if(!feedback.isConnected||version!==loadToken)return;
+     const answer=String(data?.answer||"").trim()||fallback;
+     explainMarkup(detail,answer);
+     if(state.results[index])state.results[index].explanation=answer;
+    }).catch(()=>{
+     if(!feedback.isConnected||version!==loadToken)return;
+     explainMarkup(detail,fallback);
+     if(state.results[index])state.results[index].explanation=fallback;
+    });
+   }
   };
   card.append(rows,check,skipOne,feedback);return;
  }
