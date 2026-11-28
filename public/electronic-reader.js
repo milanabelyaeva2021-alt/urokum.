@@ -1417,18 +1417,84 @@ function saveTeacherThread(thread,key=teacherThreadKey()){
  if(keys.length>30)for(const keyToRemove of keys.slice(0,keys.length-30))delete teacherChats[keyToRemove];
  toStore(TEACHER_CHAT_KEY,teacherChats);
 }
+async function copyTeacherText(value,button){
+ try{
+  if(!navigator.clipboard?.writeText)throw Error("Clipboard unavailable");
+  await navigator.clipboard.writeText(String(value||""));
+  const old=button.textContent;button.textContent="✓ Скопійовано";
+  setTimeout(()=>{if(button.isConnected)button.textContent=old},1600);
+ }catch(error){
+  button.textContent="Не вдалося скопіювати";
+ }
+}
 function renderTeacherMessages(){
  const host=$("teacherMessages"),messages=currentTeacherThread();
  host.replaceChildren();
  if(!messages.length){
   host.append(make("p","teacher-empty","Привіт! Запитай про події з підручника або про відповідь у тесті. Я запам’ятаю нашу розмову, і ти зможеш продовжити її пізніше."));
- }else for(const message of messages){
+ }else messages.forEach((message,index)=>{
   const card=make("div","teacher-message "+(message.role==="user"?"user":"assistant"));
   const body=make("div","message-body");
   explainMarkup(body,String(message.content||""));
   card.append(body);
-  host.append(card);
- }
+  const actions=make("div","teacher-message-actions");
+  const copy=make("button","teacher-message-action","Копіювати");
+  copy.type="button";copy.title="Скопіювати текст повідомлення";
+  copy.onclick=()=>copyTeacherText(message.content,copy);
+  actions.append(copy);
+  if(message.role==="user"){
+   const edit=make("button","teacher-message-action","Редагувати");
+   edit.type="button";
+   edit.onclick=()=>{
+    if(teacherBusy)return;
+    actions.hidden=true;body.hidden=true;
+    const editor=make("textarea","teacher-edit-input");
+    editor.value=String(message.content||"");editor.maxLength=500;editor.rows=3;
+    const controls=make("div","teacher-edit-controls");
+    const cancel=make("button","teacher-message-action","Скасувати");
+    cancel.onclick=()=>{editor.remove();controls.remove();actions.hidden=false;body.hidden=false};
+    const save=make("button","primary","Зберегти й надіслати");
+    save.onclick=()=>{
+     if(teacherBusy)return;
+     const updated=editor.value.trim();if(updated.length<3)return;
+     const history=currentTeacherThread();
+     saveTeacherThread(history.slice(0,index));
+     activeTeacherQuizContext=message.context||null;
+     refreshTeacherContext();
+     $("studentQuestion").value=updated;
+     sendTeacherMessage();
+    };
+    controls.append(cancel,save);card.insertBefore(editor,actions);
+    card.insertBefore(controls,actions);editor.focus();
+   };
+   actions.append(edit);
+  }else{
+   const regenerate=make("button","teacher-message-action","Повторити відповідь");
+   regenerate.type="button";
+   regenerate.onclick=()=>{
+    if(teacherBusy)return;
+    const history=currentTeacherThread();
+    let userIndex=index-1;
+    while(userIndex>=0&&history[userIndex]?.role!=="user")userIndex--;
+    if(userIndex<0)return;
+    const previous=history[userIndex];
+    saveTeacherThread(history.slice(0,userIndex));
+    activeTeacherQuizContext=previous.context||null;
+    refreshTeacherContext();
+    $("studentQuestion").value=previous.content;
+    sendTeacherMessage();
+   };
+   actions.append(regenerate);
+  }
+  const remove=make("button","teacher-message-action teacher-action-danger","Видалити");
+  remove.type="button";
+  remove.onclick=()=>{
+   if(teacherBusy)return;
+   const history=currentTeacherThread();
+   history.splice(index,1);saveTeacherThread(history);renderTeacherMessages();
+  };
+  actions.append(remove);card.append(actions);host.append(card);
+ });
  host.scrollTop=host.scrollHeight;
 }
 function refreshTeacherContext(){
