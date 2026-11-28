@@ -556,9 +556,11 @@ function evidenceIndex(text){
  if(value.endsWith(" ")){value=value.slice(0,-1);offsets.pop()}
  return {value,offsets};
 }
-function evidenceBounds(haystack,quote){
+function evidenceBounds(haystack,quote,{shortExact=false}={}){
  const searched=evidenceIndex(haystack),expected=evidenceIndex(quote).value;
- if(expected.length<24||expected.split(" ").length<4)return null;
+ // For teacher-checked short dates and table cells, permit an exact
+ // multi-token phrase; automatic AI evidence still requires long citations.
+ if(shortExact ? expected.length<8 : expected.length<24||expected.split(" ").length<4)return null;
  const at=searched.value.indexOf(expected);
  if(at<0)return null;
  return {start:searched.offsets[at],end:searched.offsets[at+expected.length-1]+1};
@@ -623,7 +625,7 @@ function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))
    !el.querySelector("p, li, td, th, dd, dt, blockquote, figcaption"));
  for(const el of nodes){
   const full=el.textContent||"";
-  const sentence=exact?evidenceBounds(full,quote):fullSentenceContaining(full,quote);
+  const sentence=exact?evidenceBounds(full,quote,{shortExact:true}):fullSentenceContaining(full,quote);
   if(!sentence)continue;
   const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
   const segments=[];let cursor=0,node;
@@ -966,7 +968,13 @@ function showQuestion(){
    const values=boxes.flatMap((box,i)=>box.checked?[i]:[]);
    if(values.length!==3){feedback.hidden=false;feedback.textContent="Обери рівно три твердження.";return}
    const correct=values.every(x=>q.answers.includes(x));
-   boxes.forEach((box,i)=>{box.disabled=true;box.closest(".fixed-statement")?.classList.add(q.answers.includes(i)?"answer-correct":"answer-wrong");});
+   // Highlight what THIS student selected, not every true/false fact.
+   // A checked correct option is green; a checked incorrect option is red.
+   // Correct but unchecked options remain neutral and are listed in feedback.
+   boxes.forEach((box,i)=>{
+    box.disabled=true;
+    if(box.checked)box.closest(".fixed-statement")?.classList.add(q.answers.includes(i)?"answer-correct":"answer-wrong");
+   });
    const key=q.answers.map(x=>x+1).join(", ");
    record({status:correct?"correct":"wrong",userAnswer:values.map(x=>x+1).join(", "),
     correctAnswer:key,explanation:q.explanation},(correct?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні: "+key+". "+q.explanation);
@@ -986,7 +994,13 @@ function showQuestion(){
    if(!current()||verified)return;
    const values=inputs.map(x=>normalize(x.value));
    if(values.some(x=>!x)){feedback.hidden=false;feedback.textContent="Введи обидва імені.";return}
-   const good=values.map((v,i)=>q.aliases[i].some(a=>normalize(a)===v));
+   // Accept either the correct given name OR the correct surname OR both.
+   // Reject an unrelated name; comparison ignores case and extra whitespace.
+   const good=values.map((v,i)=>{
+    const expected=normalize(q.answers[i]).split(/\s+/u).filter(x=>x.length>=3);
+    const supplied=v.split(/\s+/u).filter(Boolean);
+    return expected.some(token=>supplied.includes(token));
+   });
    inputs.forEach((el,i)=>{el.disabled=true;el.classList.add(good[i]?"field-correct":"field-wrong");el.closest(".fixed-question-row")?.classList.add(good[i]?"answer-correct":"answer-wrong")});
    record({status:good.every(Boolean)?"correct":"wrong",userAnswer:inputs.map(x=>x.value).join("; "),
     correctAnswer:q.answers.join("; "),explanation:q.answers.join("; ")},
