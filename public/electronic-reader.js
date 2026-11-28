@@ -1053,8 +1053,32 @@ function showQuestion(){
     if(box.checked)box.closest(".fixed-statement")?.classList.add(q.answers.includes(i)?"answer-correct":"answer-wrong");
    });
    const key=q.answers.map(x=>x+1).join(", ");
-   record({status,userAnswer:values.length?values.map(x=>x+1).join(", "):"Не вибрано жодного",
-    correctAnswer:key,explanation:q.explanation},(allCorrect?"✓ Усі відповіді правильні! ":selectedCorrect>0?"Частково правильно: "+selectedCorrect+" правильних із "+q.answers.length+". ":"✕ Правильних відповідей не вибрано. ")+"Правильні: "+key+". "+q.explanation);
+   const heading=(allCorrect?"✓ Усі відповіді правильні! ":selectedCorrect>0?
+    "Частково правильно: "+selectedCorrect+" правильних із "+q.answers.length+". ":
+    "✕ Правильних відповідей не вибрано. ")+"Правильні номери: "+key+".";
+   record({status,userAnswer:values.map(x=>x+1).join(", "),
+    correctAnswer:key,explanation:"Хибні твердження: "+q.options.map((_,i)=>i).filter(i=>!q.answers.includes(i)).map(i=>i+1).join(", ")},heading);
+   const falseItems=q.options.map((statement,i)=>({number:i+1,statement,
+    correction:String(q.falseExplanations?.[i]||"")})).filter((item,i)=>!q.answers.includes(i));
+   const panel=make("div","false-statement-explanation");
+   const title=make("strong",null,"Чому хибні твердження?");
+   const content=make("p","small","Учитель-ШІ пояснює хибні твердження…");
+   panel.append(title,content);feedback.append(panel);
+   const fallback=falseItems.map(item=>item.number+". "+(item.correction||
+    "Це твердження суперечить матеріалу підручника.")).join("\n");
+   const version=loadToken;
+   aiCall("explain-false-statements",{
+    text:String(current?.text||globalLessonText()).slice(0,14000),
+    falseStatements:falseItems
+   },40000).then(data=>{
+    if(!feedback.isConnected||version!==loadToken||!data?.answer?.trim())return;
+    explainMarkup(content,data.answer.trim());
+    if(state.results[index])state.results[index].explanation=data.answer.trim();
+   }).catch(()=>{
+    if(!feedback.isConnected||version!==loadToken)return;
+    explainMarkup(content,fallback);
+    if(state.results[index])state.results[index].explanation=fallback;
+   });
   };
   card.append(rows,check,skipOne,feedback);return;
  }
