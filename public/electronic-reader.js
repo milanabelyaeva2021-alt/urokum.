@@ -535,10 +535,10 @@ function quizStepBar(state){
  steps.setAttribute("aria-label","Прогрес перевірки");
  for(let i=0;i<state.questions.length;i++){
   const result=state.results?.[i];
-  const kind=result?.status==="correct"?"correct":result?.status==="wrong"?"wrong":
+  const kind=result?.status==="correct"?"correct":result?.status==="partial"?"partial":result?.status==="wrong"?"wrong":
     result?.status==="skipped"||result?.status==="ungraded"?"skipped":i===state.index?"current":"pending";
   const step=make("li","quizStep "+kind);
-  step.append(make("span","bar"),make("span","step-label",(i+1)+(result?.status==="correct"?" ✓":result?.status==="wrong"?" ✕":"")));
+  step.append(make("span","bar"),make("span","step-label",(i+1)+(result?.status==="correct"?" ✓":result?.status==="partial"?" ◐":result?.status==="wrong"?" ✕":"")));
   steps.append(step);
  }
  return steps;
@@ -968,7 +968,7 @@ function showQuestion(){
    const n=values.filter((x,i)=>x===q.answers[i]).length;
    selects.forEach((el,i)=>{el.disabled=true;el.classList.add(values[i]===q.answers[i]?"field-correct":"field-wrong");el.closest(".fixed-question-row")?.classList.add(values[i]===q.answers[i]?"answer-correct":"answer-wrong")});
    const key=q.answers.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", ");
-   record({status:n===4?"correct":"wrong",userAnswer:values.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "),
+   record({status:n===4?"correct":n>0?"partial":"wrong",userAnswer:values.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "),
     correctAnswer:key,explanation:key},(n===4?"✓ Правильно! ":"Правильно "+n+" із 4. ")+"Відповідь: "+key+".");
   };
   card.append(rows,check,skipOne,feedback);return;
@@ -983,8 +983,9 @@ function showQuestion(){
   check.onclick=()=>{
    if(!current()||verified)return;
    const values=boxes.flatMap((box,i)=>box.checked?[i]:[]);
-   if(values.length!==3){feedback.hidden=false;feedback.textContent="Обери рівно три твердження.";return}
-   const correct=values.every(x=>q.answers.includes(x));
+   const selectedCorrect=values.filter(x=>q.answers.includes(x)).length;
+   const allCorrect=selectedCorrect===q.answers.length&&values.length===q.answers.length;
+   const status=allCorrect?"correct":selectedCorrect>0?"partial":"wrong";
    // Highlight what THIS student selected, not every true/false fact.
    // A checked correct option is green; a checked incorrect option is red.
    // Correct but unchecked options remain neutral and are listed in feedback.
@@ -993,8 +994,8 @@ function showQuestion(){
     if(box.checked)box.closest(".fixed-statement")?.classList.add(q.answers.includes(i)?"answer-correct":"answer-wrong");
    });
    const key=q.answers.map(x=>x+1).join(", ");
-   record({status:correct?"correct":"wrong",userAnswer:values.map(x=>x+1).join(", "),
-    correctAnswer:key,explanation:q.explanation},(correct?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні: "+key+". "+q.explanation);
+   record({status,userAnswer:values.length?values.map(x=>x+1).join(", "):"Не вибрано жодного",
+    correctAnswer:key,explanation:q.explanation},(allCorrect?"✓ Усі відповіді правильні! ":selectedCorrect>0?"Частково правильно: "+selectedCorrect+" правильних із "+q.answers.length+". ":"✕ Правильних відповідей не вибрано. ")+"Правильні: "+key+". "+q.explanation);
   };
   card.append(rows,check,skipOne,feedback);return;
  }
@@ -1019,7 +1020,7 @@ function showQuestion(){
     return expected.some(token=>supplied.includes(token));
    });
    inputs.forEach((el,i)=>{el.disabled=true;el.classList.add(good[i]?"field-correct":"field-wrong");el.closest(".fixed-question-row")?.classList.add(good[i]?"answer-correct":"answer-wrong")});
-   record({status:good.every(Boolean)?"correct":"wrong",userAnswer:inputs.map(x=>x.value).join("; "),
+   record({status:good.every(Boolean)?"correct":good.some(Boolean)?"partial":"wrong",userAnswer:inputs.map(x=>x.value).join("; "),
     correctAnswer:q.answers.join("; "),explanation:q.answers.join("; ")},
     (good.every(Boolean)?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні відповіді: "+q.answers.map((x,i)=>(i+1)+". "+x).join("; ")+".");
   };
