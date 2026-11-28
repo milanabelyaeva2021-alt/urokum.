@@ -123,12 +123,21 @@ h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;marg
 .choice.wrong .choice-mark{color:#ab2636}
 :root[data-theme="dark"] .choice.correct{background:#183e2a!important;color:#d8ffe3}
 :root[data-theme="dark"] .choice.wrong{background:#4d242b!important;color:#ffe2e2}
-.quiz-feedback-box{padding:12px 14px;border-radius:11px;margin-top:12px;font-size:14px;line-height:1.65}
-.quiz-feedback-box.is-correct{background:#e4f6e9;border:1px solid #79c893;color:#185630}
-.quiz-feedback-box.is-wrong{background:#fee6e3;border:1px solid #df8888;color:#83232c}
-.quiz-feedback-box.is-neutral{background:var(--greenSoft);border:1px solid var(--line);color:var(--ink)}
-:root[data-theme="dark"] .quiz-feedback-box.is-correct{background:#173a28;color:#d2f5dc}
-:root[data-theme="dark"] .quiz-feedback-box.is-wrong{background:#4b2630;color:#ffdfe1}
+/* Feedback and tutor explanations always use ordinary text.
+   Only actual answer choices retain success/error background colors. */
+.quiz-feedback-box,.quiz-feedback-box.is-correct,.quiz-feedback-box.is-wrong,.quiz-feedback-box.is-neutral,
+:root[data-theme="dark"] .quiz-feedback-box.is-correct,
+:root[data-theme="dark"] .quiz-feedback-box.is-wrong{
+ background:transparent;
+ border:0;
+ box-shadow:none;
+ color:var(--ink);
+ border-radius:0;
+ padding:10px 0 5px;
+ margin-top:12px;
+ font-size:14px;
+ line-height:1.65;
+}
 .completion{border-color:var(--line);text-align:left;position:relative;overflow:hidden;padding-top:25px}
 .completion:before{content:"";position:absolute;top:0;left:0;right:0;height:9px;background:repeating-linear-gradient(135deg,#ffc414 0 14px,#292121 14px 27px)}
 .completion .finish-badge{display:inline-block;margin:9px 0 13px;padding:7px 11px;border-radius:8px;background:#ffc414;color:#302410;font-size:12px;font-weight:900;letter-spacing:.05em}
