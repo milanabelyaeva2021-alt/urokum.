@@ -947,7 +947,7 @@ function showQuestion(){
    const values=selects.map(x=>x.value===""?-1:Number(x.value));
    if(values.includes(-1)){feedback.hidden=false;feedback.textContent="Встанови всі чотири відповідності.";return}
    const n=values.filter((x,i)=>x===q.answers[i]).length;
-   selects.forEach((el,i)=>{el.disabled=true;el.classList.add(values[i]===q.answers[i]?"field-correct":"field-wrong")});
+   selects.forEach((el,i)=>{el.disabled=true;el.classList.add(values[i]===q.answers[i]?"field-correct":"field-wrong");el.closest(".fixed-question-row")?.classList.add(values[i]===q.answers[i]?"answer-correct":"answer-wrong")});
    const key=q.answers.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", ");
    record({status:n===4?"correct":"wrong",userAnswer:values.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "),
     correctAnswer:key,explanation:key},(n===4?"✓ Правильно! ":"Правильно "+n+" із 4. ")+"Відповідь: "+key+".");
@@ -966,7 +966,7 @@ function showQuestion(){
    const values=boxes.flatMap((box,i)=>box.checked?[i]:[]);
    if(values.length!==3){feedback.hidden=false;feedback.textContent="Обери рівно три твердження.";return}
    const correct=values.every(x=>q.answers.includes(x));
-   boxes.forEach(box=>box.disabled=true);
+   boxes.forEach((box,i)=>{box.disabled=true;box.closest(".fixed-statement")?.classList.add(q.answers.includes(i)?"answer-correct":"answer-wrong");});
    const key=q.answers.map(x=>x+1).join(", ");
    record({status:correct?"correct":"wrong",userAnswer:values.map(x=>x+1).join(", "),
     correctAnswer:key,explanation:q.explanation},(correct?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні: "+key+". "+q.explanation);
@@ -987,7 +987,7 @@ function showQuestion(){
    const values=inputs.map(x=>normalize(x.value));
    if(values.some(x=>!x)){feedback.hidden=false;feedback.textContent="Введи обидва імені.";return}
    const good=values.map((v,i)=>q.aliases[i].some(a=>normalize(a)===v));
-   inputs.forEach((el,i)=>{el.disabled=true;el.classList.add(good[i]?"field-correct":"field-wrong")});
+   inputs.forEach((el,i)=>{el.disabled=true;el.classList.add(good[i]?"field-correct":"field-wrong");el.closest(".fixed-question-row")?.classList.add(good[i]?"answer-correct":"answer-wrong")});
    record({status:good.every(Boolean)?"correct":"wrong",userAnswer:inputs.map(x=>x.value).join("; "),
     correctAnswer:q.answers.join("; "),explanation:q.answers.join("; ")},
     (good.every(Boolean)?"✓ Правильно! ":"✕ Є помилка. ")+"Правильні відповіді: "+q.answers.map((x,i)=>(i+1)+". "+x).join("; ")+".");
