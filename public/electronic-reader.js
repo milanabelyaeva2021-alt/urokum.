@@ -983,6 +983,11 @@ function showQuestion(){
   check.onclick=()=>{
    if(!current()||verified)return;
    const values=boxes.flatMap((box,i)=>box.checked?[i]:[]);
+   if(values.length===0){
+    feedback.hidden=false;feedback.className="quiz-feedback-box is-neutral";
+    feedback.textContent="Спочатку обери хоча б одне твердження.";
+    return;
+   }
    const selectedCorrect=values.filter(x=>q.answers.includes(x)).length;
    const allCorrect=selectedCorrect===q.answers.length&&values.length===q.answers.length;
    const status=allCorrect?"correct":selectedCorrect>0?"partial":"wrong";
@@ -1504,11 +1509,20 @@ $("studentQuestion").addEventListener("keydown",event=>{
   if(!teacherBusy)sendTeacherMessage();
  }
 });
+function isQuizSpecificQuestion(request,context){
+ if(!context)return false;
+ const msg=String(request||"").toLocaleLowerCase("uk").trim();
+ // An explicit mention of a letter/numbered answer or the test itself.
+ // Ordinary history questions, e.g. "Чому дисиденти чинили опір?",
+ // must NOT inherit an unrelated quiz question.
+ return /(?:^|\s)(?:[1-6]\s*[-–—]\s*[абвгґ]|[абвгґ]\s*(?:і|та|чи|або)\s*[абвгґ])(?:\s|$|[?.!,])/iu.test(msg)
+  || /(?:відповідн|варіант|літер|букв|у\s+(?:пункті|завданні|тесті|питанн)|позначив|обрав|вибрав|правильн.*(?:відповід|варіант))/iu.test(msg)
+  || /(?:чому|поясни)\s+(?:[1-6]\b|[абвгґ]\b)/iu.test(msg);
+}
 function preciseMatchingTutorAnswer(context,request){
  if(context?.questionType!=="match"||!context.answerSubmitted||
-   !Array.isArray(context.correctMapping)||!context.correctMapping.length)return null;
- // Use the verified key when the student asks why an association is correct.
- if(!/(чому|поясн|відповід|правильн|варіант|літер|букв|помил|збіга|^\s*[1-4]\b)/iu.test(request))return null;
+   !Array.isArray(context.correctMapping)||!context.correctMapping.length||
+   !isQuizSpecificQuestion(request,context))return null;
  const nums=String(request).match(/(?:^|[^\d])([1-4])(?=\s|[.,:;!?\-–—]|$)/gu)||[];
  const requested=new Set(nums.map(x=>Number(x.match(/[1-4]/u)?.[0])));
  const rows=requested.size?context.correctMapping.filter(x=>requested.has(x.row)):context.correctMapping;
@@ -1543,15 +1557,17 @@ async function sendTeacherMessage(){
   const history=previous.map(m=>({role:m.role,content:m.content.slice(0,650)}));
   const pendingQuiz=Boolean(quizState?.questions?.[quizState.index]&&
    !quizState?.results?.[quizState.index]);
-  const exactAnswer=!pendingQuiz?preciseMatchingTutorAnswer(context,text):null;
+  const aboutQuiz=isQuizSpecificQuestion(text,context);
+  const appliedContext=aboutQuiz?context:null;
+  const exactAnswer=!pendingQuiz?preciseMatchingTutorAnswer(appliedContext,text):null;
   if(exactAnswer){
    saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:exactAnswer}],key);
   }else{
   const data=await aiCall("ask-question",{
    text:String(source).slice(0,14500),question:text,chatHistory:history,
-   hintOnly:pendingQuiz,
-   ...(context?{quizContext:pendingQuiz?
-    {question:context.question,questionType:context.questionType,sourcePoint:context.sourcePoint,questionRows:context.questionRows,answerOptions:context.answerOptions}:context}:{})
+   hintOnly:pendingQuiz&&aboutQuiz,
+   ...(appliedContext?{quizContext:pendingQuiz?
+    {question:appliedContext.question,questionType:appliedContext.questionType,sourcePoint:appliedContext.sourcePoint,questionRows:appliedContext.questionRows,answerOptions:appliedContext.answerOptions}:appliedContext}:{})
   },40000);
   saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:data.answer||"Не вдалося отримати пояснення."}],key);
   }
