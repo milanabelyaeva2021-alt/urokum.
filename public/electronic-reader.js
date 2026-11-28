@@ -932,7 +932,7 @@ function showQuestion(){
   feedback.className="quiz-feedback-box "+(result.status==="correct"?"is-correct":
     result.status==="wrong"?"is-wrong":"is-neutral");
   explainMarkup(feedback,message);
-  if(result.status!=="ungraded"){
+  if(q.type==="choice"&&result.status!=="ungraded"){
    const find=make("button","secondary","📖 Показати в тексті");
    find.onclick=()=>showEvidenceForQuestion(q,feedback,state.mode);
    const row=make("div","source-back-link");row.append(find);card.append(row);
@@ -1442,15 +1442,38 @@ function setTeacherOpen(visible){
  if(visible){renderTeacherMessages();refreshTeacherContext()}
 }
 function questionContextFromQuiz(q,result){
- return {
-  question:String(q.question||"").slice(0,450),
+ const kind=q.type||"choice",answered=Boolean(result&&result.status);
+ const context={
+  question:String(q.question||"").slice(0,450),questionType:kind,
   sourcePoint:Number.isInteger(q.sourcePoint)?q.sourcePoint:(pointIndex+1),
-  ...(result?.userAnswer?{chosenAnswer:String(result.userAnswer).slice(0,250)}:{}),
-  ...(result?.status==="wrong"||result?.status==="correct"?
-   {correctAnswer:String(q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||"").slice(0,550)}:{}),
-  ...(q.explanation?{explanation:String(q.explanation).slice(0,450)}:{}),
-  ...(q.sourceQuote?{sourceQuote:String(q.sourceQuote).slice(0,280)}:{})
+  answerSubmitted:answered
  };
+ if(kind==="match"){
+  context.answerOptions=(q.options||[]).map((v,i)=>("АБВГҐ"[i]+". "+v)).slice(0,5);
+  context.questionRows=(q.rows||[]).map((v,i)=>(i+1)+". "+v).slice(0,5);
+  if(answered)context.correctMapping=(q.answers||[]).map((n,i)=>({
+   row:i+1,letter:"АБВГҐ"[n],answer:q.options[n]
+  }));
+ }else if(kind==="multi"){
+  context.answerOptions=(q.options||[]).map((v,i)=>(i+1)+". "+v).slice(0,6);
+  if(answered)context.correctStatements=(q.answers||[]).map(i=>i+1);
+ }else if(kind==="short"){
+  context.questionRows=(q.prompts||[]).map((v,i)=>(i+1)+". "+v).slice(0,4);
+  if(answered)context.correctNames=(q.answers||[]).slice(0,4);
+ }else if(kind==="choice"){
+  context.answerOptions=(q.options||[]).map((v,i)=>("АБВГ"[i]+". "+v)).slice(0,4);
+  if(answered)context.correctOption="АБВГ"[q.correct]+". "+q.options?.[q.correct];
+ }else if(kind==="open"&&answered){
+  context.referenceAnswer=String(q.referenceAnswer||"").slice(0,700);
+ }
+ if(answered){
+  if(result?.userAnswer)context.chosenAnswer=String(result.userAnswer).slice(0,350);
+  if(result?.correctAnswer)context.correctAnswer=String(result.correctAnswer).slice(0,650);
+  if(result?.explanation)context.explanation=String(result.explanation).slice(0,700);
+  else if(q.explanation)context.explanation=String(q.explanation).slice(0,450);
+  if(q.sourceQuote)context.sourceQuote=String(q.sourceQuote).slice(0,280);
+ }
+ return context;
 }
 function openTeacherForQuestion(q,result){
  activeTeacherQuizContext=questionContextFromQuiz(q,result);
@@ -1507,7 +1530,7 @@ async function sendTeacherMessage(){
    text:String(source).slice(0,14500),question:text,chatHistory:history,
    hintOnly:pendingQuiz,
    ...(context?{quizContext:pendingQuiz?
-    {question:context.question,sourcePoint:context.sourcePoint}:context}:{})
+    {question:context.question,questionType:context.questionType,sourcePoint:context.sourcePoint,questionRows:context.questionRows,answerOptions:context.answerOptions}:context}:{})
   },40000);
   saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:data.answer||"Не вдалося отримати пояснення."}],key);
  }catch(error){
