@@ -410,16 +410,57 @@ async function loadPoint(i,j){
   window.scrollTo({top:0,behavior:"instant"});
  }catch(e){if(token===loadToken)showError(e)}
 }
+// Cache only reusable explanations, never a learner's free-form writing or chat.
+// The cache key includes the exact task inputs and source text, so a different
+// mistake or a revised paragraph gets its own explanation.
+const EXPLANATION_STORE="urokum:ai-explanations:v1:"+BOOK;
+const EXPLANATION_TASKS=new Set(["explain-wrong-matches","explain-false-statements","explain-wrong-answer"]);
+const EXPLANATION_TTL=30*24*60*60*1000;
+let explanationCache=fromStore(EXPLANATION_STORE,{});
+const explanationInFlight=new Map();
+function explanationKey(task,body){
+ const payload=JSON.stringify({task,body});
+ let a=2166136261,b=5381;
+ for(let i=0;i<payload.length;i++){
+  a=Math.imul(a^payload.charCodeAt(i),16777619)>>>0;
+  b=(Math.imul(b,33)^payload.charCodeAt(i))>>>0;
+ }
+ return task+":"+a.toString(16)+":"+b.toString(16)+":"+payload.length;
+}
+function saveExplanation(key,answer){
+ const now=Date.now();
+ explanationCache[key]={answer,at:now};
+ const valid=Object.entries(explanationCache).filter(([,v])=>v&&
+  typeof v.answer==="string"&&v.at>now-EXPLANATION_TTL)
+  .sort((x,y)=>y[1].at-x[1].at).slice(0,100);
+ explanationCache=Object.fromEntries(valid);
+ toStore(EXPLANATION_STORE,explanationCache);
+}
 async function aiCall(task,body,timeout=30000){
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
- try{
-  const response=await fetch("/api/tutor",{
-   method:"POST",headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({task,...body}),signal:controller.signal});
-  let data;try{data=await response.json()}catch{throw Error("ШІ повернув незрозумілу відповідь")}
-  if(!response.ok)throw Error(data.error||"ШІ тимчасово не відповідає");
-  return data;
- }finally{clearTimeout(timer)}
+ const reusable=EXPLANATION_TASKS.has(task);
+ const key=reusable?explanationKey(task,body):null;
+ if(key){
+  const entry=explanationCache[key];
+  if(entry&&typeof entry.answer==="string"&&entry.at>Date.now()-EXPLANATION_TTL)
+   return {answer:entry.answer,cached:true};
+  if(explanationInFlight.has(key))return explanationInFlight.get(key);
+ }
+ const request=(async()=>{
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
+  try{
+   const response=await fetch("/api/tutor",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({task,...body}),signal:controller.signal});
+   let data;try{data=await response.json()}catch{throw Error("ШІ повернув незрозумілу відповідь")}
+   if(!response.ok)throw Error(data.error||"ШІ тимчасово не відповідає");
+   if(key&&typeof data.answer==="string"&&data.answer.trim())
+    saveExplanation(key,data.answer.trim());
+   return data;
+  }finally{clearTimeout(timer)}
+ })();
+ if(!key)return request;
+ explanationInFlight.set(key,request);
+ try{return await request}finally{explanationInFlight.delete(key)}
 }
 // Editor-provided questions for §1, point 1; keys are deterministic.
 const PREPARED_P1_POINT1=[
