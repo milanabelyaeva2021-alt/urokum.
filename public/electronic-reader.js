@@ -809,9 +809,6 @@ function showQuestion(){
       correct:q.correct,reason:reason.slice(0,300),book:BOOK,mode:state.mode})
    });
    if(!response.ok)throw Error("Сервер тимчасово недоступний");
-   // A reported question should not enter the student's spaced-review queue.
-   const badId=pointId()+":"+q.question.slice(0,120);
-   delete spaced[badId];toStore(SPACED_KEY,spaced);
    delete locallySavedQuestions[lessonQuizKey()];toStore(QUIZ_CACHE,locallySavedQuestions);
    delete locallySavedReviews[lessons[lessonIndex].id];toStore(REVIEW_QUIZ_CACHE,locallySavedReviews);
    report.textContent="✓ Повідомлення надіслано";
@@ -929,7 +926,6 @@ function globalLessonText(){
  return current?.text?.slice(0,14700)||"";
 }
 function finishQuiz(mode){
- if(quizState)recordSpaced(quizState);
  const state=quizState;
  if(!state)return;
  const lesson=lessons[lessonIndex],results=state.results||[];
