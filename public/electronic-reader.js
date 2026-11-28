@@ -889,7 +889,7 @@ function showQuestion(){
   if(verified||!current())return;
   verified=true;state.skipped=(state.skipped||0)+1;
   state.results[index]={status:"skipped",question:q.question,type:q.type||"choice",correctAnswer:
-    q.type==="open"?q.referenceAnswer:q.options?.[q.correct]||""};
+    q.type==="open"?q.referenceAnswer:q.type==="short"?q.answers.join("; "):q.type==="match"?q.answers.map((x,i)=>(i+1)+"-"+("АБВГҐ"[x])).join(", "):q.type==="multi"?q.answers.map(x=>x+1).join(", "):q.options?.[q.correct]||""};
   state.index++;
   if(state.index===state.questions.length)finishQuiz(state.mode);
   else{showQuestion();go($("quiz"))}
@@ -944,7 +944,7 @@ function showQuestion(){
    const input=make("input");input.type="text";input.placeholder="Ім’я або прізвище";input.autocomplete="off";
    label.append(input);rows.append(label);inputs.push(input);
   });
-  const normalize=x=>String(x||"").toLocaleLowerCase("uk").replace(/[’ʼ']/gu,"").replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
+  const normalize=x=>String(x||"").toLocaleLowerCase("uk").replace(/[’ʼ']/gu,"").replace(/[^\p{L}\p{N}]+/gu," ").trim();
   const check=make("button","primary","Перевірити імена");verifyButton=check;
   check.onclick=()=>{
    if(!current()||verified)return;
@@ -1091,7 +1091,7 @@ function showCompletion(already){
   host.append(result);
   const misses=attempt.results.filter(x=>x.status!=="correct");
   host.append(make("p","repeat-note",misses.length
-   ?"Є "+misses.length+" запитань для повторення."
+   ?"Є "+misses.length+" запитань із помилками."
    :"Усі відповіді правильні!"));
  }else host.append(make("p","small","Можна продовжити читання та повернутися до перевірки пізніше."));
  const primary=make("div","completion-main-actions");
