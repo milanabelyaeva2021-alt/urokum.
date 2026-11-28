@@ -809,10 +809,27 @@ async function showPreparedEvidenceForQuestion(q){
    }
   }
   if(!matched){
-   host.replaceChildren(make("p","source-note","Дослівний уривок у доступному електронному тексті не знайдено. Перевір відповідну таблицю або речення в підручнику."));
-   if(q.sourceHint)host.append(make("p","small","Джерело: "+q.sourceHint));
-   const back=make("button","secondary","← Повернутися до запитання");
-   back.onclick=returnToQuizFromEvidence;host.append(back);
+   // Some PDFs export table cells as graphical glyphs rather than text.
+   // The first answer was editor-supplied verbatim with a table reference.
+   // Render ONLY the supplied cell as an explicitly labeled fallback,
+   // never a guessed paragraph or an unrelated matched sentence.
+   if(q===PREPARED_P1_POINT1[0]||
+      (q.question===PREPARED_P1_POINT1[0].question&&q.exactEvidence)){
+    const table=make("table","ebook-table");
+    table.append(make("caption",null,"Періодизація історії України"));
+    const tr=make("tr");
+    tr.append(make("th",null,"Другий період Новітньої історії України"),
+     make("td",null,"1945 р. — початок XXI ст."));
+    table.append(tr);
+    host.replaceChildren(make("p","small","Фрагмент таблиці за перевіреним завданням. У витягнутому тексті PDF відповідну комірку не знайдено."),table);
+    revealEvidenceInText("1945 р. — початок XXI ст.",host,returnToQuizFromEvidence,true);
+    $("evidenceTitle").textContent="Таблиця «Періодизація історії України»";
+   }else{
+    host.replaceChildren(make("p","source-note","Дослівний уривок у доступному електронному тексті не знайдено. Перевір відповідну таблицю або речення в підручнику."));
+    if(q.sourceHint)host.append(make("p","small","Джерело: "+q.sourceHint));
+    const back=make("button","secondary","← Повернутися до запитання");
+    back.onclick=returnToQuizFromEvidence;host.append(back);
+   }
   }
  }catch(error){
   host.replaceChildren(make("p","source-note","Не вдалося завантажити текст підручника."));
