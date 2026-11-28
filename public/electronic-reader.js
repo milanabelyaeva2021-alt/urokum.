@@ -1054,18 +1054,20 @@ function showQuestion(){
   const rows=make("div","fixed-question-rows"),inputs=[];
   q.prompts.forEach((value,i)=>{
    const label=make("label","fixed-question-row");label.append(make("strong",null,(i+1)+". "+value));
-   const input=make("input");input.type="text";input.placeholder="Ім’я або прізвище";input.autocomplete="off";
+   const input=make("input");input.type="text";input.placeholder=q.prompts.length===1?"Назва поняття або скорочення":"Ім’я або прізвище";input.autocomplete="off";
    label.append(input);rows.append(label);inputs.push(input);
   });
   const normalize=x=>String(x||"").toLocaleLowerCase("uk").replace(/[’ʼ']/gu,"").replace(/[^\p{L}\p{N}]+/gu," ").trim();
-  const check=make("button","primary","Перевірити імена");verifyButton=check;
+  const check=make("button","primary",q.prompts.length===1?"Перевірити поняття":"Перевірити імена");verifyButton=check;
   check.onclick=()=>{
    if(!current()||verified)return;
    const values=inputs.map(x=>normalize(x.value));
-   if(values.some(x=>!x)){feedback.hidden=false;feedback.textContent="Введи обидва імені.";return}
+   if(values.some(x=>!x)){feedback.hidden=false;feedback.textContent=q.prompts.length===1?"Введи відповідь.":"Заповни обидві відповіді.";return}
    // Accept either the correct given name OR the correct surname OR both.
    // Reject an unrelated name; comparison ignores case and extra whitespace.
    const good=values.map((v,i)=>{
+    if(q.prompts.length===1&&Array.isArray(q.aliases?.[i]))
+     return q.aliases[i].some(alias=>normalize(alias)===v);
     const expected=normalize(q.answers[i]).split(/\s+/u).filter(x=>x.length>=3);
     const supplied=v.split(/\s+/u).filter(Boolean);
     return expected.some(token=>supplied.includes(token));
