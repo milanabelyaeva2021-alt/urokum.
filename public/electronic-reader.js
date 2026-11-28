@@ -426,11 +426,11 @@ const PREPARED_P1_POINT1=[
  {type:"choice",question:"Які хронологічні межі має другий період Новітньої історії України?",
   options:["Кінець XVIII ст. — 1914 р.","1914—1945 рр.","1945 р. — початок XXI ст.","XVI—XVIII ст."],
   correct:2,explanation:"Другий період Новітньої історії України починається 1945 р. і триває до початку XXI ст.",
-  sourceHint:"Таблиця «Періодизація історії України»."},
+  sourceHint:"Таблиця «Періодизація історії України».",evidenceQuotes:["1945 р. — початок XXI ст."],exactEvidence:true},
  {type:"match",question:"Встановіть відповідність між хронологічними межами та назвою періоду.",
   rows:["1945 р. — перша половина 1950-х рр.","Друга половина 1950-х — середина 1960-х рр.","1985—1991 рр.","1991—2005 рр."],
   options:["Україна в умовах десталінізації","Становлення України як незалежної держави","Відновлення незалежності України","Україна в перші післявоєнні роки","Творення нової України"],
-  answers:[3,0,2,1],sourceHint:"Таблиця «Структура другого періоду»."},
+  answers:[3,0,2,1],sourceHint:"Таблиця «Структура другого періоду».",evidenceQuotes:["1945 р. — перша половина 1950-х рр.","Україна в перші післявоєнні роки","1985—1991 рр."],exactEvidence:true},
  {type:"multi",question:"Оберіть три правильні твердження.",
   options:[
    "Нове радянське керівництво на чолі з Хрущовим дещо лібералізувало тоталітарний режим.",
@@ -439,15 +439,17 @@ const PREPARED_P1_POINT1=[
    "Другий період Новітньої історії України розпочався 1914 р.",
    "У період загострення кризи радянської системи влада послабила ідеологічний тиск на суспільство.",
    "Відкритий опір системі чинили дисиденти («незгодні»)."
-  ],answers:[0,2,5],explanation:"Хибні твердження 2, 4 і 5: рух відмовився від збройних форм боротьби; другий період почався 1945 р.; влада посилила ідеологічний тиск."},
+  ],evidenceQuotes:["Нове радянське керівництво на чолі з Микитою Хрущовим дещо лібералізувало тоталітарний режим","У перші її роки Україні довелося пережити ще одну трагедію — Чорнобильську катастрофу","Відкритий опір системі чинили лише дисиденти"],exactEvidence:true,answers:[0,2,5],explanation:"Хибні твердження 2, 4 і 5: рух відмовився від збройних форм боротьби; другий період почався 1945 р.; влада посилила ідеологічний тиск."},
  {type:"short",question:"Впізнайте історичних діячів за описом.",
   prompts:[
    "Очолював радянське керівництво, коли режим було дещо лібералізовано, а мільйони незаконно засуджених реабілітовано.",
    "Очолював партійне керівництво, яке започаткувало політику «перебудови»."
   ],answers:["Микита Хрущов","Михайло Горбачов"],
+  evidenceQuotes:["Микитою Хрущовим","Горбачов","політику «перебудови»"],exactEvidence:true,
   aliases:[["хрущов","микита хрущов","м с хрущов","м хрущов"],["горбачов","михайло горбачов","м с горбачов","м горбачов"]]},
  {type:"open",question:"Як змінилися форми національно-визвольного руху в Україні порівняно з першими повоєнними роками? Опиши своїми словами.",
   referenceAnswer:"У перші повоєнні роки на західноукраїнських землях тривало збройне протистояння. Пізніше учасники руху відмовилися від збройних форм боротьби й зосередилися на критиці радянської системи та моральному опорі.",
+  evidenceQuotes:["відмовилися від збройних форм боротьби й зосередилися на критиці радянської системи та моральному опорі","тривале збройне протистояння на західноукраїнських землях"],exactEvidence:true,
   explanation:"Порівняй збройне протистояння повоєнних років із подальшим ненасильницьким опором."}
 ];
 
@@ -608,7 +610,7 @@ function fullSentenceContaining(text,quote){
  return chosen&&bestOverlap>=Math.min(15,bounds.end-bounds.start)?chosen:null;
 }
 
-function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))){
+function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz")),exact=false){
  if(!quote)return false;
  for(const previous of area.querySelectorAll("mark.ebook-source-highlight")){
   previous.replaceWith(...Array.from(previous.childNodes));
@@ -621,7 +623,7 @@ function revealEvidenceInText(quote,area=$("ebookText"),onBack=()=>go($("quiz"))
    !el.querySelector("p, li, td, th, dd, dt, blockquote, figcaption"));
  for(const el of nodes){
   const full=el.textContent||"";
-  const sentence=fullSentenceContaining(full,quote);
+  const sentence=exact?evidenceBounds(full,quote):fullSentenceContaining(full,quote);
   if(!sentence)continue;
   const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
   const segments=[];let cursor=0,node;
@@ -783,7 +785,41 @@ function returnToQuizFromEvidence(){
 function focusEvidenceQuote(value,q){
  return String(value||"").trim();
 }
+async function showPreparedEvidenceForQuestion(q){
+ const savedState=quizState,version=loadToken,book=lessons[lessonIndex];
+ const length=(points[book?.id]||[]).length;
+ const box=$("evidenceView"),host=$("evidenceText");
+ box.hidden=false;$("quiz").hidden=true;$("readerArticle").hidden=true;
+ host.replaceChildren(make("p","source-note","Шукаю точне підтвердження в підручнику…"));
+ const quotes=Array.isArray(q.evidenceQuotes)?q.evidenceQuotes.filter(Boolean):[];
+ let matched=false;
+ try{
+  for(let i=0;i<length&&!matched;i++){
+   const part=await fetchPoint(lessonIndex,i);
+   if(version!==loadToken||savedState!==quizState)return;
+   if(Array.isArray(part.blocks)&&part.blocks.length)renderEbookBlocks(host,part.blocks);
+   else{host.replaceChildren();(part.paragraphs||[]).forEach(p=>host.append(make("p",null,bookTypography(p))))}
+   for(const quote of quotes){
+    if(revealEvidenceInText(quote,host,returnToQuizFromEvidence,true)){
+     $("evidenceTitle").textContent="Пункт "+(i+1)+" · "+book.title;
+     matched=true;break;
+    }
+   }
+  }
+  if(!matched){
+   host.replaceChildren(make("p","source-note","Дослівний уривок у доступному електронному тексті не знайдено. Перевір відповідну таблицю або речення в підручнику."));
+   if(q.sourceHint)host.append(make("p","small","Джерело: "+q.sourceHint));
+   const back=make("button","secondary","← Повернутися до запитання");
+   back.onclick=returnToQuizFromEvidence;host.append(back);
+  }
+ }catch(error){
+  host.replaceChildren(make("p","source-note","Не вдалося завантажити текст підручника."));
+  const back=make("button","secondary","← Повернутися до запитання");back.onclick=returnToQuizFromEvidence;host.append(back);
+ }
+ go(box);
+}
 async function showEvidenceForQuestion(q,feedback,mode){
+ if(Array.isArray(q.evidenceQuotes))return showPreparedEvidenceForQuestion(q);
  const savedState=quizState,version=loadToken;
  const length=(points[lessons[lessonIndex]?.id]||[]).length;
  const isReview=mode==="review";
@@ -877,7 +913,7 @@ function showQuestion(){
   feedback.className="quiz-feedback-box "+(result.status==="correct"?"is-correct":
     result.status==="wrong"?"is-wrong":"is-neutral");
   explainMarkup(feedback,message);
-  if(result.status==="wrong"){
+  if(result.status!=="ungraded"){
    const find=make("button","secondary","📖 Показати в тексті");
    find.onclick=()=>showEvidenceForQuestion(q,feedback,state.mode);
    const row=make("div","source-back-link");row.append(find);card.append(row);
@@ -978,7 +1014,7 @@ function showQuestion(){
     if(!current()||verified)return;
     const status=data.passed===true?"correct":data.passed===false?"wrong":"ungraded";
     record({status,userAnswer:answer,correctAnswer:q.referenceAnswer,explanation:data.answer||""},
-      (status==="correct"?"✓ Правильно. ":status==="wrong"?"✕ Ще не зовсім. ":"Перевірка без оцінки. ")+
+      (status==="correct"?"✓ Правильно. ":status==="wrong"?"✕ Відповідь неправильна або неповна. ":"Перевірка без оцінки. ")+
       (data.answer||"Орієнтовна відповідь: "+q.referenceAnswer));
    }catch(error){
     if(!current()||verified)return;
@@ -1015,7 +1051,7 @@ function showQuestion(){
   check.disabled=true;
   record({status:chosen===q.correct?"correct":"wrong",userAnswer:q.options[chosen],
    correctAnswer:q.options[q.correct],explanation:q.explanation||""},
-   (chosen===q.correct?"✓ Правильно! ":"✕ Ще ні. Правильна відповідь: "+
+   (chosen===q.correct?"✓ Правильно! ":"✕ Неправильна відповідь. Правильна: "+
     q.options[q.correct]+(/[.!?…]\s*$/u.test(q.options[q.correct])?" ":". "))+
     (q.explanation||"Перечитай відповідний уривок підручника."));
  };
