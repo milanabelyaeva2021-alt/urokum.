@@ -278,17 +278,20 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
  opacity:.62!important;background:transparent!important;box-shadow:none!important;
  border:1px dashed var(--line)!important;color:var(--muted)!important;
 }
-.spaced-review{display:flex;align-items:center;flex-wrap:wrap;gap:10px;
- padding:12px 16px;margin:0 0 15px;border:1px solid var(--line);
- background:var(--card);border-radius:13px}
-.spaced-review .small{margin-left:auto}
-.spaced-review button{font-size:13px;padding:8px 12px}
 @media(max-width:700px){
  #bookShell{padding-bottom:165px}
  #quiz,#review,#finished,#evidenceView{scroll-margin-bottom:160px}
  .teacher-fab{max-width:118px!important;padding:9px 11px!important;
  font-size:12px!important;bottom:max(12px,env(safe-area-inset-bottom))!important}
 }
+
+.fixed-question-rows{display:grid;gap:13px;margin:18px 0}
+.fixed-question-row{display:grid;gap:8px;padding:13px;border:1px solid var(--line);border-radius:12px;line-height:1.55}
+.fixed-question-row select,.fixed-question-row input{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
+.fixed-statement{display:flex;align-items:flex-start;gap:11px;padding:12px 13px;border:1px solid var(--line);border-radius:11px;line-height:1.5;cursor:pointer}
+.fixed-statement input{accent-color:var(--green);margin-top:5px;flex:none}
+.field-correct{outline:2px solid #31995b}
+.field-wrong{outline:2px solid #d46c6c}
 </style>
 </head>
 <body>
