@@ -413,7 +413,7 @@ async function loadPoint(i,j){
 // Cache only reusable explanations, never a learner's free-form writing or chat.
 // The cache key includes the exact task inputs and source text, so a different
 // mistake or a revised paragraph gets its own explanation.
-const EXPLANATION_STORE="urokum:ai-explanations:v1:"+BOOK;
+const EXPLANATION_STORE="urokum:ai-explanations:v2:"+BOOK;
 const EXPLANATION_TASKS=new Set(["explain-wrong-matches","explain-false-statements","explain-wrong-answer"]);
 const EXPLANATION_TTL=30*24*60*60*1000;
 let explanationCache=fromStore(EXPLANATION_STORE,{});
@@ -981,28 +981,6 @@ function showQuestion(){
   state.mode==="practice"?"Повторення складного":"Самостійна робота");
  card.append(label,make("p","qNo","Запитання "+(index+1)+" із "+state.questions.length),
   make("h2","questionText",q.question));
- const report=make("button","secondary quiz-report","⚑ Повідомити про помилку");
- report.type="button";
- report.onclick=async()=>{
-  if(report.disabled)return;
-  const reason=window.prompt("Що саме неправильно в запитанні? (необов’язково)","Неправильна правильна відповідь");
-  if(reason===null)return;
-  report.disabled=true;report.textContent="Надсилаю повідомлення…";
-  try{
-   const response=await fetch("/api/quiz-report",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({question:q.question,options:q.options||[],
-      correct:q.correct,reason:reason.slice(0,300),book:BOOK,mode:state.mode})
-   });
-   if(!response.ok)throw Error("Сервер тимчасово недоступний");
-   delete locallySavedQuestions[lessonQuizKey()];toStore(QUIZ_CACHE,locallySavedQuestions);
-   delete locallySavedReviews[lessons[lessonIndex].id];toStore(REVIEW_QUIZ_CACHE,locallySavedReviews);
-   report.textContent="✓ Повідомлення надіслано";
-  }catch(error){
-   report.disabled=false;report.textContent="⚑ Спробувати повідомити ще раз";
-  }
- };
- card.append(report);
  const feedback=make("div","quizFeedback");feedback.hidden=true;
  let verified=false,verifyButton=null,skipButton=null;
  activeTeacherQuizContext=questionContextFromQuiz(q,state.results[index]);
@@ -1214,7 +1192,7 @@ function showQuestion(){
   card.append(rows,check,skipOne,feedback);return;
  }
  if(q.type==="open"){
-  const hint=make("p","small","Відповідай своїми словами: ШІ перевірить зміст, а не дослівний збіг.");
+
   const input=make("textarea","written");input.rows=5;input.maxLength=1800;
   input.placeholder="Моя відповідь…";
   const check=make("button","primary","Перевірити письмову відповідь");verifyButton=check;
@@ -1242,7 +1220,7 @@ function showQuestion(){
       "ШІ зараз недоступний, тому не зараховую відповідь як правильну. Орієнтовна відповідь: "+q.referenceAnswer);
    }
   };
-  card.append(hint,input,check,skipOne,feedback);return;
+  card.append(input,check,skipOne,feedback);return;
  }
  let chosen=-1;
  const answers=make("div","answers");
