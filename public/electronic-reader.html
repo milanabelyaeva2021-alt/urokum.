@@ -111,6 +111,8 @@ h1{font-size:clamp(27px,4.5vw,43px);line-height:1.15;letter-spacing:-.035em;marg
 .quizStep.current .bar{background:#eebf17}
 .quizStep.correct .bar{background:#2f9861}
 .quizStep.wrong .bar{background:#c83b3b}
+.quizStep.partial .bar{background:#e6b21d}
+.quizStep.partial .step-label{color:#9c7400}
 .quizStep.skipped .bar{background:linear-gradient(90deg,#a9a1ba 50%,var(--line) 50%)}
 .quizStep.pending .bar{background:var(--line)}
 .choice.correct{background:#e0f5e7!important;border:2px solid #31995b!important;color:#175c38}
@@ -233,7 +235,7 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
 .teacher-messages{flex:1;overflow:auto;padding:18px 14px 12px;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
 .teacher-empty{color:var(--muted);font-size:14px;line-height:1.6;margin:auto 8px;text-align:center}
 .teacher-message{max-width:94%;padding:11px 13px;line-height:1.55;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:14px}
-.teacher-message.assistant{align-self:flex-start;background:var(--greenSoft);border-bottom-left-radius:4px}
+.teacher-message.assistant{align-self:flex-start;background:transparent!important;color:var(--ink);border:none;box-shadow:none;padding:8px 2px;border-radius:0}
 .teacher-message.user{align-self:flex-end;background:var(--green);color:#fff;border-bottom-right-radius:4px}
 .teacher-message .message-role{font-weight:800;font-size:11px;display:block;opacity:.75;margin-bottom:4px}
 .teacher-compose{padding:12px;border-top:1px solid var(--line);flex:none;background:var(--card)}
