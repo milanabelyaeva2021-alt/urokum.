@@ -292,6 +292,20 @@ mark.ebook-source-highlight{background:rgba(166,126,237,.23)!important;color:inh
 .fixed-statement input{accent-color:var(--green);margin-top:5px;flex:none}
 .field-correct{outline:2px solid #31995b}
 .field-wrong{outline:2px solid #d46c6c}
+.fixed-statement.answer-correct,.fixed-question-row.answer-correct{
+ background:#e0f5e7!important;border:2px solid #31995b!important;color:#175c38!important;
+}
+.fixed-statement.answer-wrong,.fixed-question-row.answer-wrong{
+ background:#ffe5e6!important;border:2px solid #d86b72!important;color:#842830!important;
+}
+:root[data-theme="dark"] .fixed-statement.answer-correct,:root[data-theme="dark"] .fixed-question-row.answer-correct{
+ background:#183e2a!important;color:#d8ffe3!important;border-color:#369963!important;
+}
+:root[data-theme="dark"] .fixed-statement.answer-wrong,:root[data-theme="dark"] .fixed-question-row.answer-wrong{
+ background:#49232a!important;color:#ffe1e3!important;border-color:#dd747b!important;
+}
+.fixed-question-row.answer-correct select,.fixed-question-row.answer-correct input{background:inherit;color:inherit}
+.fixed-question-row.answer-wrong select,.fixed-question-row.answer-wrong input{background:inherit;color:inherit}
 </style>
 </head>
 <body>
