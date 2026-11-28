@@ -1625,12 +1625,19 @@ async function sendTeacherMessage(){
    !quizState?.results?.[quizState.index]);
   const aboutQuiz=isQuizSpecificQuestion(text,context);
   const appliedContext=aboutQuiz?context:null;
+  // When the student starts a new historical topic, detach the old quiz:
+  // a stale matching exercise must not steer the next explanation.
+  const historyForTutor=context&&!aboutQuiz?[]:history;
+  if(context&&!aboutQuiz){
+   activeTeacherQuizContext=null;
+   refreshTeacherContext();
+  }
   const exactAnswer=!pendingQuiz?preciseMatchingTutorAnswer(appliedContext,text):null;
   if(exactAnswer){
    saveTeacherThread([...currentTeacherThread(),{role:"assistant",content:exactAnswer}],key);
   }else{
   const data=await aiCall("ask-question",{
-   text:String(source).slice(0,14500),question:text,chatHistory:history,
+   text:String(source).slice(0,14500),question:text,chatHistory:historyForTutor,
    hintOnly:pendingQuiz&&aboutQuiz,
    ...(appliedContext?{quizContext:pendingQuiz?
     {question:appliedContext.question,questionType:appliedContext.questionType,sourcePoint:appliedContext.sourcePoint,questionRows:appliedContext.questionRows,answerOptions:appliedContext.answerOptions}:appliedContext}:{})
