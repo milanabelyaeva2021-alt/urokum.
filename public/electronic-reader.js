@@ -986,6 +986,33 @@ function showQuestion(){
   feedback.className="quiz-feedback-box "+(result.status==="correct"?"is-correct":
     result.status==="wrong"?"is-wrong":"is-neutral");
   explainMarkup(feedback,message);
+  if((q.type==="choice"||q.type==="short")&&
+    (result.status==="wrong"||result.status==="partial")){
+   const panel=make("div","wrong-answer-explanation");
+   panel.append(make("strong",null,"Пояснення від Учителя-ШІ"));
+   const detail=make("p","small","Учитель-ШІ пояснює помилку…");
+   panel.append(detail);feedback.append(panel);
+   const fallback=q.explanation||"Правильна відповідь: "+String(result.correctAnswer||"")+".";
+   const version=loadToken;
+   aiCall("explain-wrong-answer",{
+    text:String(globalLessonText()).slice(0,14000),
+    wrongAnswer:{
+     question:q.type==="short"?(q.prompts||[]).map((v,i)=>(i+1)+". "+v).join("\n"):q.question,
+     studentAnswer:String(result.userAnswer||""),
+     correctAnswer:String(result.correctAnswer||""),
+     explanation:String(q.explanation||"")
+    }
+   },40000).then(data=>{
+    if(!feedback.isConnected||version!==loadToken)return;
+    const answer=String(data?.answer||"").trim()||fallback;
+    explainMarkup(detail,answer);
+    if(state.results[index])state.results[index].explanation=answer;
+   }).catch(()=>{
+    if(!feedback.isConnected||version!==loadToken)return;
+    explainMarkup(detail,fallback);
+    if(state.results[index])state.results[index].explanation=fallback;
+   });
+  }
   if(q.type==="choice"&&result.status!=="ungraded"){
    const find=make("button","secondary","📖 Показати в тексті");
    find.onclick=()=>showEvidenceForQuestion(q,feedback,state.mode);
